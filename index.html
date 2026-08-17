@@ -288,7 +288,7 @@ tr:last-child td{border-bottom:0}
   <div class="marca">
     <h1>Gerador de Cartelas</h1>
     <span>planilha + template &rarr; folha A4 pronta pra imprimir</span>
-    <span class="versao">v9</span>
+    <span class="versao">v10</span>
   </div>
   <div class="abas" role="tablist">
     <button class="aba" role="tab" id="aba-1" aria-selected="true" onclick="verPainel(1)"><span class="n">1</span> Templates</button>
@@ -689,8 +689,7 @@ function apagarTpl(i){
   if(tplAtual===templates[i].id) tplAtual=null;
   templates.splice(i,1); pintarTemplates(); pintarSeletor(); atualizarRodape(); marcarSujo(); lerDados();
 }
-function editar(id){ tplAtual=id; verPainel(2); pintarSeletor(); pintarTela();
-iniciarNuvem(); }
+function editar(id){ tplAtual=id; verPainel(2); pintarSeletor(); pintarTela(); }
 
 /* ================= 2. campos ================= */
 function pintarSeletor(){
@@ -1415,6 +1414,7 @@ function atualizarRodape(){
   document.getElementById('bt-imprimir').disabled = prontas===0;
 }
 pintarSeletor(); pintarTela();
+iniciarNuvem();
 </script>
 </body>
 </html>

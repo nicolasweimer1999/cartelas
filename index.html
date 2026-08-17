@@ -8,6 +8,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&family=Barlow+Condensed:wght@400;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&family=Anton&family=Archivo+Black&family=Bebas+Neue&family=Oswald:wght@400;600;700&family=Montserrat:wght@600;700;800&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
 :root{
   --azul:#1D4686;
@@ -282,7 +284,7 @@ tr:last-child td{border-bottom:0}
   <div class="marca">
     <h1>Gerador de Cartelas</h1>
     <span>planilha + template &rarr; folha A4 pronta pra imprimir</span>
-    <span class="versao">v6</span>
+    <span class="versao">v7</span>
   </div>
   <div class="abas" role="tablist">
     <button class="aba" role="tab" id="aba-1" aria-selected="true" onclick="verPainel(1)"><span class="n">1</span> Templates</button>
@@ -655,7 +657,7 @@ function apagarTpl(i){
   templates.splice(i,1); pintarTemplates(); pintarSeletor(); atualizarRodape(); marcarSujo(); lerDados();
 }
 function editar(id){ tplAtual=id; verPainel(2); pintarSeletor(); pintarTela();
-iniciarBanco(); }
+iniciarNuvem(); }
 
 /* ================= 2. campos ================= */
 function pintarSeletor(){
@@ -1119,28 +1121,22 @@ function imprimir(){
   });
 }
 
-/* ================= salvamento automático ================= */
-let bancoOk = false, banco = null, relogioSalvar = null;
+/* ================= salvamento na nuvem ================= */
+const FB = {
+  apiKey: "AIzaSyCukhuvprO8ukmUj2l9A4KkwwXd0x7CXsQ",
+  authDomain: "cartelas-ledur.firebaseapp.com",
+  databaseURL: "https://cartelas-ledur-default-rtdb.firebaseio.com",
+  projectId: "cartelas-ledur",
+  storageBucket: "cartelas-ledur.firebasestorage.app",
+  messagingSenderId: "36610483502",
+  appId: "1:36610483502:web:78f564289fdfae2e1ac6bf"
+};
+const CAMINHO = 'cartelas/config';
+let nuvemOk = false, refCfg = null, relogioSalvar = null, ignorarEco = false;
 
-function abrirBanco(){
-  return new Promise(res=>{
-    try{
-      if(!window.indexedDB) return res(null);
-      const req = indexedDB.open('cartelas-ledur', 1);
-      req.onupgradeneeded = e=>{
-        const db = e.target.result;
-        if(!db.objectStoreNames.contains('cfg')) db.createObjectStore('cfg');
-      };
-      req.onsuccess = e=> res(e.target.result);
-      req.onerror = ()=> res(null);
-      req.onblocked = ()=> res(null);
-      setTimeout(()=>res(null), 2500);
-    }catch(err){ res(null); }
-  });
-}
 function estadoAtual(){
   return {
-    versao:2, templates,
+    versao:3, templates,
     inicio: document.getElementById('f-inicio')?.value || '2',
     moeda: document.getElementById('f-moeda')?.value || 'virgula',
     cols: Object.keys(COLPAD).reduce((a,k)=>{
@@ -1149,7 +1145,8 @@ function estadoAtual(){
       return a;
     },{}),
     larg: document.getElementById('f-larg')?.value || '96',
-    esp: document.getElementById('f-esp')?.value || '3'
+    esp: document.getElementById('f-esp')?.value || '3',
+    quando: Date.now()
   };
 }
 /* completa templates salvos por versões anteriores */
@@ -1159,7 +1156,6 @@ function migrarTemplates(lista){
     CAMPOS.forEach(c=>{
       const base = padrao(c);
       campos[c] = campos[c] ? {...base, ...campos[c]} : base;
-      // propriedades novas que podem vir vazias
       if(campos[c].caber === undefined) campos[c].caber = base.caber;
       if(campos[c].quebra === undefined) campos[c].quebra = base.quebra;
       if(campos[c].prefixo === undefined) campos[c].prefixo = base.prefixo;
@@ -1178,60 +1174,71 @@ function aplicarEstado(cfg){
   pintarTemplates(); pintarSeletor(); pintarTela(); lerDados(); atualizarRodape();
 }
 function marcarSujo(){
-  if(!bancoOk) return;
+  if(!nuvemOk || ignorarEco) return;
+  pintarSelo('salvando');
   clearTimeout(relogioSalvar);
-  relogioSalvar = setTimeout(gravar, 700);
+  relogioSalvar = setTimeout(gravar, 900);
 }
 function gravar(){
-  if(!banco) return;
-  try{
-    const tx = banco.transaction('cfg','readwrite');
-    tx.objectStore('cfg').put(estadoAtual(), 'atual');
-    tx.oncomplete = ()=> pintarSelo('salvo');
-    tx.onerror = ()=> pintarSelo('erro');
-  }catch(err){ pintarSelo('erro'); }
+  if(!refCfg) return;
+  refCfg.set(estadoAtual())
+    .then(()=> pintarSelo('salvo'))
+    .catch(e=> pintarSelo('erro', e.message));
 }
-function pintarSelo(estado){
+function pintarSelo(estado, extra){
   const e = document.getElementById('selo-salvo');
   if(!e) return;
   const hora = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-  if(estado==='salvo'){ e.textContent = 'salvo automaticamente às '+hora; e.className='marca-salvo ok'; }
-  else if(estado==='erro'){ e.textContent = 'falha ao salvar — usa o botão Salvar ajustes'; e.className='marca-salvo ruim'; }
-  else { e.textContent = 'salvamento automático indisponível aqui — usa Salvar ajustes'; e.className='marca-salvo ruim'; }
+  const mapa = {
+    salvo:   ['salvo na nuvem às '+hora, 'ok'],
+    salvando:['salvando…', ''],
+    off:     ['sem conexão com a nuvem — usa Salvar cópia', 'ruim'],
+    erro:    ['falha ao salvar'+(extra?': '+extra:''), 'ruim']
+  };
+  const [txt, cls] = mapa[estado] || mapa.off;
+  e.textContent = txt;
+  e.className = 'marca-salvo ' + cls;
 }
-async function iniciarBanco(){
-  banco = await abrirBanco();
+function iniciarNuvem(){
   const embutida = window.__CFG && (window.__CFG.templates||[]).length ? window.__CFG : null;
-  if(!banco){
-    if(embutida){ aplicarEstado(embutida); }
-    pintarSelo('off');
-    return;
-  }
-  bancoOk = true;
   try{
-    const tx = banco.transaction('cfg','readonly');
-    const req = tx.objectStore('cfg').get('atual');
-    req.onsuccess = ()=>{
-      if(req.result && (req.result.templates||[]).length){
-        aplicarEstado(req.result);
-        pintarSelo('salvo');
-      }else if(embutida){
-        aplicarEstado(embutida);
-        pintarSelo('salvo');
-      }else{
-        const e = document.getElementById('selo-salvo');
-        if(e){ e.textContent='salvamento automático ativo'; e.className='marca-salvo ok'; }
-      }
-    };
-    req.onerror = ()=>{ if(embutida) aplicarEstado(embutida); pintarSelo('off'); };
-  }catch(err){ if(embutida) aplicarEstado(embutida); pintarSelo('off'); }
+    if(!window.firebase) throw new Error('SDK não carregou');
+    firebase.initializeApp(FB);
+    refCfg = firebase.database().ref(CAMINHO);
+    nuvemOk = true;
+    pintarSelo('salvando');
+    refCfg.once('value')
+      .then(snap=>{
+        const cfg = snap.val();
+        if(cfg && (cfg.templates||[]).length){
+          ignorarEco = true;
+          aplicarEstado(cfg);
+          ignorarEco = false;
+          pintarSelo('salvo');
+        }else if(embutida){
+          aplicarEstado(embutida);
+          pintarSelo('salvo');
+        }else{
+          const e = document.getElementById('selo-salvo');
+          if(e){ e.textContent='conectado — vai salvar sozinho'; e.className='marca-salvo ok'; }
+        }
+      })
+      .catch(err=>{
+        nuvemOk = false;
+        if(embutida) aplicarEstado(embutida);
+        pintarSelo('erro', err.message);
+      });
+  }catch(err){
+    nuvemOk = false;
+    if(embutida) aplicarEstado(embutida);
+    pintarSelo('off');
+  }
 }
 function limparSalvos(){
-  if(!confirm('Apagar os templates e ajustes salvos neste navegador?')) return;
-  try{ banco.transaction('cfg','readwrite').objectStore('cfg').delete('atual'); }catch(err){}
+  if(!confirm('Apagar os templates e ajustes salvos na nuvem?')) return;
   templates = []; linhas = []; tplAtual = null;
   pintarTemplates(); pintarSeletor(); pintarTela(); atualizarRodape();
-  pintarSelo('salvo');
+  if(refCfg) refCfg.set(estadoAtual()).then(()=>pintarSelo('salvo'));
 }
 
 /* ================= app com ajustes embutidos ================= */

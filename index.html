@@ -302,7 +302,7 @@ tr:last-child td{border-bottom:0}
   <div class="marca">
     <h1>Gerador de Cartelas</h1>
     <span>planilha + template &rarr; folha A4 pronta pra imprimir</span>
-    <span class="versao">v1</span>
+    <span class="versao">v2</span>
   </div>
   <div class="abas" role="tablist">
     <button class="aba" role="tab" id="aba-1" aria-selected="true" onclick="verPainel(1)"><span class="n">1</span> Templates</button>
@@ -691,8 +691,7 @@ function pintarTemplates(){
           <div>
             <label class="et">Tipo</label>
             <select onchange="setTpl(${i},'tipo',this.value)">
-              <option value="simples">Simples</option>
-              <option value="depor">De / Por</option>
+              ${Object.entries(TIPOS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}
             </select>
           </div>
         </div>
@@ -936,6 +935,13 @@ function lerPlanilha(arq){
   fr.readAsArrayBuffer(arq);
 }
 /* ===== mapeamento de colunas, por aba, com detecção automática ===== */
+const MARCA_BOA = /boa[s]?\s+do\s+dia/i;
+const TIPOS = {
+  simples:   'Simples',
+  depor:     'De / Por',
+  boa:       'Boa do dia',
+  boa_depor: 'Boa do dia — de/por'
+};
 const COLPAD = {produto:2, variacao:'paren', de:6, por:7, unidade:'preco'};
 let colsAba = {};   // { nomeDaAba: {produto, variacao, de, por, unidade} }
 
@@ -1037,9 +1043,12 @@ function lerDados(){
   abasPlanilha.forEach(nome=>{
     const c = colsAba[nome] || {...COLPAD};
     const grade = XLSX.utils.sheet_to_json(pastaXls.Sheets[nome], {header:1, defval:''});
+    let naBoa = false;
     for(let r=inicio-1; r<grade.length; r++){
       const l = grade[r]||[];
       const bruto = String(l[c.produto]??'').trim();
+      // a partir do marcador, tudo que vier na aba é Boa do Dia
+      if(MARCA_BOA.test(bruto) || (l||[]).some(v=>MARCA_BOA.test(String(v??'')))){ naBoa = true; continue; }
       const g = c.de==='' ? {valor:'',unidade:''} : fatiar(l[c.de], modo);
       const h = fatiar(l[c.por], modo);
       let {produto, variacao} = separarParenteses(bruto);
@@ -1050,10 +1059,11 @@ function lerDados(){
       if(!produto || !h.valor) continue;
       const unidade = c.unidade==='preco' ? (h.unidade || g.unidade || '')
                     : (c.unidade==='' ? '' : String(l[c.unidade]??'').trim());
-      const tipo = g.valor ? 'depor' : 'simples';
+      const tipo = naBoa ? (g.valor ? 'boa_depor' : 'boa')
+                         : (g.valor ? 'depor' : 'simples');
       const tpl = templates.find(t=>t.aba===nome && t.tipo===tipo);
       linhas.push({aba:nome, linha:r+1, produto, variacao, unidade,
-                   de:g.valor, por:h.valor, tipo, tplId: tpl?tpl.id:null});
+                   de:g.valor, por:h.valor, tipo, boa:naBoa, tplId: tpl?tpl.id:null});
     }
   });
   montarTabelaColunas();
@@ -1105,7 +1115,7 @@ function pintarPlanilha(){
   const semTpl = linhas.filter(l=>!l.tplId);
   const porAba = {};
   linhas.forEach(l=>{
-    porAba[l.aba] = porAba[l.aba] || {simples:0, depor:0, orfas:0};
+    porAba[l.aba] = porAba[l.aba] || {simples:0, depor:0, boa:0, boa_depor:0, orfas:0};
     porAba[l.aba][l.tipo]++;
     if(!l.tplId) porAba[l.aba].orfas++;
   });
@@ -1114,6 +1124,7 @@ function pintarPlanilha(){
       <div class="num"><b>${linhas.length}</b><span>produtos</span></div>
       <div class="num"><b>${linhas.filter(l=>l.tipo==='simples').length}</b><span>simples</span></div>
       <div class="num"><b>${linhas.filter(l=>l.tipo==='depor').length}</b><span>de / por</span></div>
+      <div class="num"><b>${linhas.filter(l=>l.boa).length}</b><span>boa do dia</span></div>
       <div class="num ${semTpl.length?'alerta':''}"><b>${semTpl.length}</b><span>sem template</span></div>
     </div>
     ${semTpl.length ? `<div class="aviso"><b>${semTpl.length} produto(s) sem template</b>
@@ -1121,9 +1132,10 @@ function pintarPlanilha(){
     <div class="cartao">
       <label class="et">Por aba</label>
       <table>
-        <thead><tr><th>Aba</th><th>Simples</th><th>De/Por</th><th>Situação</th></tr></thead>
+        <thead><tr><th>Aba</th><th>Simples</th><th>De/Por</th><th>Boa do dia</th><th>Situação</th></tr></thead>
         <tbody>${Object.entries(porAba).map(([a,v])=>`
           <tr><td>${esc(a)}</td><td>${v.simples}</td><td>${v.depor}</td>
+          <td>${v.boa + v.boa_depor}</td>
           <td><span class="selo ${v.orfas?'selo-erro':'selo-ok'}">${v.orfas?v.orfas+' sem template':'pronta'}</span></td></tr>`).join('')}
         </tbody>
       </table>
@@ -1138,7 +1150,7 @@ function pintarPlanilha(){
           <td style="color:var(--apagado);font-size:12px">${esc(l.variacao||'—')}</td>
           <td style="font-family:'JetBrains Mono',monospace;font-size:11px">${esc(l.unidade||'—')}</td>
           <td>${esc(l.de||'—')}</td><td><b>${esc(l.por)}</b></td>
-          <td><span class="selo ${l.tplId?'selo-ok':'selo-erro'}">${l.tplId?l.tipo:'sem template'}</span></td></tr>`).join('')}
+          <td><span class="selo ${l.tplId?'selo-ok':'selo-erro'}">${l.tplId?(TIPOS[l.tipo]||l.tipo):'sem template'}</span></td></tr>`).join('')}
         </tbody>
       </table></div>
     </div>`;
@@ -1229,7 +1241,7 @@ function pintarFiltro(){
   }).join('');
   const bloqueadas = orfas.map(a=>{
     const n = linhas.filter(l=>!l.tplId && l.aba===a).length;
-    const tipos = [...new Set(linhas.filter(l=>!l.tplId && l.aba===a).map(l=>l.tipo==='depor'?'de/por':'simples'))];
+    const tipos = [...new Set(linhas.filter(l=>!l.tplId && l.aba===a).map(l=>TIPOS[l.tipo]||l.tipo))];
     return `<span class="chip chip-off" title="falta template ${tipos.join(' e ')} pra essa aba">
       ${esc(a)} <span class="qt">${n} sem template</span></span>`;
   }).join('');
@@ -1265,7 +1277,7 @@ function pintarPreview(){
   const l = uteis[iPrev];
   cont.textContent = `${iPrev+1} de ${uteis.length}`;
   pv.innerHTML = htmlCartela(l, 78);
-  leg.textContent = `${l.aba} · linha ${l.linha} · ${l.tipo==='depor'?'de/por':'simples'}`;
+  leg.textContent = `${l.aba} · linha ${l.linha} · ${TIPOS[l.tipo]||l.tipo}`;
   const fim = ()=>encolher(pv);
   (document.fonts && document.fonts.ready) ? document.fonts.ready.then(fim) : fim();
 }

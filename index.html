@@ -46,6 +46,10 @@ header{
 .marca span{
   font-size:12px;color:#9DB6DA;letter-spacing:.04em;
 }
+.marca .versao{
+  font-family:'JetBrains Mono',monospace;font-size:10px;
+  background:var(--laranja);color:#fff;padding:2px 7px;border-radius:20px;letter-spacing:.06em;
+}
 .abas{
   display:flex;gap:2px;max-width:1180px;margin:16px auto 0;
   overflow-x:auto;
@@ -278,6 +282,7 @@ tr:last-child td{border-bottom:0}
   <div class="marca">
     <h1>Gerador de Cartelas</h1>
     <span>planilha + template &rarr; folha A4 pronta pra imprimir</span>
+    <span class="versao">v5</span>
   </div>
   <div class="abas" role="tablist">
     <button class="aba" role="tab" id="aba-1" aria-selected="true" onclick="verPainel(1)"><span class="n">1</span> Templates</button>

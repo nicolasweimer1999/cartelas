@@ -168,6 +168,12 @@ button{font-family:'Inter',sans-serif}
 .campo-bt[data-on="1"]{border-color:var(--azul);background:#F2F6FC;font-weight:600}
 .campo-bt .est{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--apagado)}
 .campo-bt .est.viva{color:var(--ok)}
+.marca-salvo{
+  font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.05em;
+  margin-top:3px;color:var(--apagado);
+}
+.marca-salvo.ok{color:var(--ok)}
+.marca-salvo.ruim{color:var(--laranja)}
 .cabeca-prev{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px}
 .navega{display:flex;align-items:center;gap:8px}
 .navega .bt{padding:5px 13px;font-size:17px;line-height:1}
@@ -485,11 +491,11 @@ tr:last-child td{border-bottom:0}
     <div class="dupla" style="max-width:420px">
       <div>
         <label class="et" for="f-larg">Largura da cartela (mm)</label>
-        <input type="number" id="f-larg" value="96" min="20" max="196" onchange="montarPreview()">
+        <input type="number" id="f-larg" value="96" min="20" max="196" onchange="montarPreview();marcarSujo()">
       </div>
       <div>
         <label class="et" for="f-esp">Espaço entre elas (mm)</label>
-        <input type="number" id="f-esp" value="3" min="0" max="20" onchange="montarPreview()">
+        <input type="number" id="f-esp" value="3" min="0" max="20" onchange="montarPreview();marcarSujo()">
       </div>
     </div>
     <p class="sub" style="margin:12px 0 0;font-size:12.5px" id="cabe-info"></p>
@@ -515,9 +521,13 @@ tr:last-child td{border-bottom:0}
 </main>
 
 <div class="barra">
-  <div class="resumo" id="resumo">Nenhum template carregado ainda.</div>
+  <div>
+    <div class="resumo" id="resumo">Nenhum template carregado ainda.</div>
+    <div class="marca-salvo" id="selo-salvo">verificando salvamento…</div>
+  </div>
   <div style="display:flex;gap:8px">
-    <button class="bt bt-vazio" onclick="salvarConfig()">Salvar ajustes</button>
+    <button class="bt bt-fraco" onclick="limparSalvos()">Limpar</button>
+    <button class="bt bt-vazio" onclick="salvarConfig()">Salvar cópia</button>
     <button class="bt bt-vazio" onclick="document.getElementById('in-cfg').click()">Carregar</button>
     <button class="bt bt-laranja bt-grande" id="bt-imprimir" onclick="imprimir()" disabled>Imprimir</button>
   </div>
@@ -585,7 +595,7 @@ ligarSolta('solta-png','in-png', arqs => {
           src:fr.result, w:img.width, h:img.height,
           aba:'', tipo:'simples', campos
         });
-        pintarTemplates(); atualizarRodape();
+        pintarTemplates(); atualizarRodape(); marcarSujo();
       };
       img.src = fr.result;
     };
@@ -633,12 +643,13 @@ function pintarTemplates(){
     if(selTipo) selTipo.value = t.tipo;
   });
 }
-function setTpl(i,k,v){ templates[i][k]=v; atualizarRodape(); if(k==='aba'||k==='tipo') lerDados(); }
+function setTpl(i,k,v){ templates[i][k]=v; atualizarRodape(); marcarSujo(); if(k==='aba'||k==='tipo') lerDados(); }
 function apagarTpl(i){
   if(tplAtual===templates[i].id) tplAtual=null;
-  templates.splice(i,1); pintarTemplates(); pintarSeletor(); atualizarRodape(); lerDados();
+  templates.splice(i,1); pintarTemplates(); pintarSeletor(); atualizarRodape(); marcarSujo(); lerDados();
 }
-function editar(id){ tplAtual=id; verPainel(2); pintarSeletor(); pintarTela(); }
+function editar(id){ tplAtual=id; verPainel(2); pintarSeletor(); pintarTela();
+iniciarBanco(); }
 
 /* ================= 2. campos ================= */
 function pintarSeletor(){
@@ -775,13 +786,14 @@ function alternarXadrez(on){ document.querySelector('.palco').classList.toggle('
 function mudar(k,v){
   const t = achaTpl(); if(!t||!campoAtual) return;
   t.campos[campoAtual][k] = (k==='size') ? parseFloat(v)||1 : v;
-  pintarTela();
+  pintarTela(); marcarSujo();
 }
 function copiarPra(){
   const t = achaTpl(); if(!t||!campoAtual) return;
   const f = {...t.campos[campoAtual]};
   let n = 0;
   templates.forEach(o=>{ if(o.id!==t.id){ o.campos[campoAtual] = {...f}; n++; } });
+  marcarSujo();
   alert(n ? `Ajustes do campo copiados pra ${n} template(s).` : 'Não há outro template pra copiar.');
 }
 
@@ -818,6 +830,7 @@ function arrastar(e0, cx, modo){
   const soltar = ()=>{
     window.removeEventListener('pointermove',mover);
     window.removeEventListener('pointerup',soltar);
+    marcarSujo();
   };
   window.addEventListener('pointermove',mover);
   window.addEventListener('pointerup',soltar);
@@ -855,7 +868,8 @@ function montarSelColunas(){
     const s = document.getElementById('c-'+k);
     if(!s || s.dataset.pronto) return;
     s.innerHTML = extras[k] + opcoes();
-    s.value = String(COLPAD[k]);
+    const salvo = window.__colsPend && window.__colsPend[k];
+    s.value = salvo != null ? salvo : String(COLPAD[k]);
     s.dataset.pronto = '1';
   });
 }
@@ -893,7 +907,7 @@ function lerDados(){
                    de:g.valor, por:h.valor, tipo, tplId: tpl?tpl.id:null});
     }
   });
-  pintarPlanilha(); atualizarRodape();
+  pintarPlanilha(); atualizarRodape(); marcarSujo();
 }
 /* separa o valor da abreviação de unidade que vem junto na célula */
 function fatiar(v, modo){
@@ -1091,13 +1105,103 @@ function imprimir(){
   });
 }
 
+/* ================= salvamento automático ================= */
+let bancoOk = false, banco = null, relogioSalvar = null;
+
+function abrirBanco(){
+  return new Promise(res=>{
+    try{
+      if(!window.indexedDB) return res(null);
+      const req = indexedDB.open('cartelas-ledur', 1);
+      req.onupgradeneeded = e=>{
+        const db = e.target.result;
+        if(!db.objectStoreNames.contains('cfg')) db.createObjectStore('cfg');
+      };
+      req.onsuccess = e=> res(e.target.result);
+      req.onerror = ()=> res(null);
+      req.onblocked = ()=> res(null);
+      setTimeout(()=>res(null), 2500);
+    }catch(err){ res(null); }
+  });
+}
+function estadoAtual(){
+  return {
+    versao:2, templates,
+    inicio: document.getElementById('f-inicio')?.value || '2',
+    moeda: document.getElementById('f-moeda')?.value || 'virgula',
+    cols: Object.keys(COLPAD).reduce((a,k)=>{
+      const s = document.getElementById('c-'+k);
+      if(s && s.dataset.pronto) a[k] = s.value;
+      return a;
+    },{}),
+    larg: document.getElementById('f-larg')?.value || '96',
+    esp: document.getElementById('f-esp')?.value || '3'
+  };
+}
+function aplicarEstado(cfg){
+  templates = cfg.templates || [];
+  tplAtual = templates.length ? templates[0].id : null;
+  const põe = (id,v)=>{ const e=document.getElementById(id); if(e && v!=null) e.value=v; };
+  põe('f-inicio', cfg.inicio); põe('f-moeda', cfg.moeda);
+  põe('f-larg', cfg.larg); põe('f-esp', cfg.esp);
+  if(cfg.cols) window.__colsPend = cfg.cols;
+  pintarTemplates(); pintarSeletor(); pintarTela(); lerDados(); atualizarRodape();
+}
+function marcarSujo(){
+  if(!bancoOk) return;
+  clearTimeout(relogioSalvar);
+  relogioSalvar = setTimeout(gravar, 700);
+}
+function gravar(){
+  if(!banco) return;
+  try{
+    const tx = banco.transaction('cfg','readwrite');
+    tx.objectStore('cfg').put(estadoAtual(), 'atual');
+    tx.oncomplete = ()=> pintarSelo('salvo');
+    tx.onerror = ()=> pintarSelo('erro');
+  }catch(err){ pintarSelo('erro'); }
+}
+function pintarSelo(estado){
+  const e = document.getElementById('selo-salvo');
+  if(!e) return;
+  const hora = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  if(estado==='salvo'){ e.textContent = 'salvo automaticamente às '+hora; e.className='marca-salvo ok'; }
+  else if(estado==='erro'){ e.textContent = 'falha ao salvar — usa o botão Salvar ajustes'; e.className='marca-salvo ruim'; }
+  else { e.textContent = 'salvamento automático indisponível aqui — usa Salvar ajustes'; e.className='marca-salvo ruim'; }
+}
+async function iniciarBanco(){
+  banco = await abrirBanco();
+  if(!banco){ pintarSelo('off'); return; }
+  bancoOk = true;
+  try{
+    const tx = banco.transaction('cfg','readonly');
+    const req = tx.objectStore('cfg').get('atual');
+    req.onsuccess = ()=>{
+      if(req.result && (req.result.templates||[]).length){
+        aplicarEstado(req.result);
+        pintarSelo('salvo');
+      }else{
+        const e = document.getElementById('selo-salvo');
+        if(e){ e.textContent='salvamento automático ativo'; e.className='marca-salvo ok'; }
+      }
+    };
+    req.onerror = ()=> pintarSelo('off');
+  }catch(err){ pintarSelo('off'); }
+}
+function limparSalvos(){
+  if(!confirm('Apagar os templates e ajustes salvos neste navegador?')) return;
+  try{ banco.transaction('cfg','readwrite').objectStore('cfg').delete('atual'); }catch(err){}
+  templates = []; linhas = []; tplAtual = null;
+  pintarTemplates(); pintarSeletor(); pintarTela(); atualizarRodape();
+  pintarSelo('salvo');
+}
+
 /* ================= config ================= */
 function salvarConfig(){
-  const cfg = {versao:1, templates};
-  const b = new Blob([JSON.stringify(cfg)], {type:'application/json'});
+  const b = new Blob([JSON.stringify(estadoAtual())], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(b);
-  a.download = 'cartelas-ajustes.json';
+  a.download = 'cartelas-ajustes-' + new Date().toISOString().slice(0,10) + '.json';
   a.click();
   URL.revokeObjectURL(a.href);
 }
@@ -1107,9 +1211,8 @@ document.getElementById('in-cfg').onchange = e=>{
   fr.onload = ()=>{
     try{
       const cfg = JSON.parse(fr.result);
-      templates = cfg.templates||[];
-      tplAtual = templates.length ? templates[0].id : null;
-      pintarTemplates(); pintarSeletor(); pintarTela(); lerDados(); atualizarRodape();
+      aplicarEstado(cfg);
+      marcarSujo();
     }catch(err){ alert('Arquivo de ajustes inválido.'); }
   };
   fr.readAsText(f); e.target.value='';

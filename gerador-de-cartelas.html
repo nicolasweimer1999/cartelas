@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gerador de Cartelas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&family=Barlow+Condensed:wght@400;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&family=Anton&family=Archivo+Black&family=Bebas+Neue&family=Oswald:wght@400;600;700&family=Montserrat:wght@600;700;800&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --azul:#1D4686;
+  --laranja:#E37835;
+  --tinta:#0E1726;
+  --papel:#EEF1F5;
+  --carta:#FFFFFF;
+  --regua:#D2DAE4;
+  --apagado:#6B7A90;
+  --ok:#1B7F4B;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:'Inter',system-ui,sans-serif;
+  background:var(--papel);
+  color:var(--tinta);
+  -webkit-font-smoothing:antialiased;
+}
+.print-root{display:none}
+
+/* ---------- cabecalho ---------- */
+header{
+  background:var(--azul);
+  color:#fff;
+  padding:18px 20px 0;
+}
+.marca{
+  display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+  max-width:1180px;margin:0 auto;
+}
+.marca h1{
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:800;font-size:30px;letter-spacing:.02em;
+  text-transform:uppercase;line-height:1;
+}
+.marca span{
+  font-size:12px;color:#9DB6DA;letter-spacing:.04em;
+}
+.abas{
+  display:flex;gap:2px;max-width:1180px;margin:16px auto 0;
+  overflow-x:auto;
+}
+.aba{
+  appearance:none;border:0;cursor:pointer;
+  background:rgba(255,255,255,.09);color:#C6D6EC;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:16px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  padding:11px 18px;border-radius:6px 6px 0 0;white-space:nowrap;
+  display:flex;align-items:center;gap:8px;
+}
+.aba .n{
+  font-family:'JetBrains Mono',monospace;font-size:11px;
+  background:rgba(255,255,255,.16);border-radius:3px;padding:1px 5px;
+}
+.aba[aria-selected="true"]{background:var(--papel);color:var(--azul)}
+.aba[aria-selected="true"] .n{background:var(--laranja);color:#fff}
+.aba:focus-visible{outline:2px solid var(--laranja);outline-offset:2px}
+
+main{max-width:1180px;margin:0 auto;padding:22px 20px 90px}
+.painel[hidden]{display:none}
+
+h2{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:22px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;
+  margin-bottom:4px;
+}
+.sub{font-size:13.5px;color:var(--apagado);margin-bottom:18px;line-height:1.5;max-width:64ch}
+
+.cartao{
+  background:var(--carta);border:1px solid var(--regua);border-radius:10px;
+  padding:18px;margin-bottom:16px;
+}
+
+/* ---------- dropzone ---------- */
+.solta{
+  border:2px dashed var(--regua);border-radius:10px;background:var(--carta);
+  padding:30px 20px;text-align:center;cursor:pointer;transition:.15s;
+}
+.solta:hover,.solta.quente{border-color:var(--laranja);background:#FFF8F3}
+.solta strong{font-size:15px;display:block;margin-bottom:4px}
+.solta small{color:var(--apagado);font-size:12.5px}
+
+/* ---------- lista de templates ---------- */
+.grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin-top:16px}
+.tpl{background:var(--carta);border:1px solid var(--regua);border-radius:10px;overflow:hidden}
+.tpl .mini{
+  height:130px;background:#F6F8FA;display:flex;align-items:center;justify-content:center;
+  border-bottom:1px solid var(--regua);
+}
+.tpl .mini img{max-width:100%;max-height:100%;object-fit:contain}
+.tpl .corpo{padding:11px}
+.tpl .nome{
+  font-size:13px;font-weight:600;margin-bottom:9px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.linha2{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.rodape-tpl{display:flex;gap:7px;margin-top:9px}
+
+label.et{
+  display:block;font-family:'JetBrains Mono',monospace;
+  font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--apagado);margin-bottom:4px;
+}
+select,input[type=text],input[type=number],input[type=color]{
+  width:100%;font-family:'Inter',sans-serif;font-size:13px;
+  padding:7px 8px;border:1px solid var(--regua);border-radius:6px;background:#fff;color:var(--tinta);
+}
+input[type=color]{padding:2px;height:32px;cursor:pointer}
+select:focus,input:focus{outline:2px solid var(--azul);outline-offset:-1px;border-color:var(--azul)}
+
+button{font-family:'Inter',sans-serif}
+.bt{
+  appearance:none;border:0;cursor:pointer;border-radius:7px;
+  font-size:13.5px;font-weight:600;padding:10px 16px;
+  display:inline-flex;align-items:center;gap:7px;justify-content:center;
+}
+.bt-azul{background:var(--azul);color:#fff}
+.bt-laranja{background:var(--laranja);color:#fff}
+.bt-vazio{background:#fff;color:var(--tinta);border:1px solid var(--regua)}
+.bt-fraco{background:transparent;color:var(--apagado);padding:6px 9px;font-size:12px}
+.bt:disabled{opacity:.4;cursor:not-allowed}
+.bt:focus-visible{outline:2px solid var(--laranja);outline-offset:2px}
+.bt-grande{font-size:16px;padding:14px 26px}
+
+/* ---------- editor de campos ---------- */
+.oficina{display:grid;grid-template-columns:1fr 300px;gap:18px;align-items:start}
+@media(max-width:860px){.oficina{grid-template-columns:1fr}}
+
+.palco{
+  background:var(--carta);border:1px solid var(--regua);border-radius:10px;padding:16px;
+  display:flex;align-items:center;justify-content:center;min-height:220px;
+}
+.tela{position:relative;max-width:100%;user-select:none;touch-action:none;line-height:1}
+.tela img{display:block;max-width:100%;height:auto}
+.caixa{
+  position:absolute;border:1.5px solid var(--laranja);
+  background:rgba(227,120,53,.07);cursor:move;
+  display:flex;overflow:hidden;
+}
+.caixa[data-sel="1"]{border-color:var(--azul);border-width:2px;background:rgba(29,70,134,.09);z-index:3}
+.caixa .txt{width:100%;white-space:nowrap;line-height:1.05}
+.puxador{
+  position:absolute;right:-6px;bottom:-6px;width:13px;height:13px;
+  background:var(--azul);border:2px solid #fff;border-radius:50%;cursor:nwse-resize;
+}
+.tag{
+  position:absolute;top:-16px;left:-1px;
+  font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.06em;
+  background:var(--azul);color:#fff;padding:1px 4px;border-radius:3px;text-transform:uppercase;
+}
+
+.ferramentas{background:var(--carta);border:1px solid var(--regua);border-radius:10px;padding:16px}
+.campo-bt{
+  width:100%;text-align:left;background:#fff;border:1px solid var(--regua);
+  border-radius:7px;padding:9px 11px;margin-bottom:7px;cursor:pointer;
+  display:flex;justify-content:space-between;align-items:center;font-size:13px;
+}
+.campo-bt[data-on="1"]{border-color:var(--azul);background:#F2F6FC;font-weight:600}
+.campo-bt .est{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--apagado)}
+.campo-bt .est.viva{color:var(--ok)}
+.cabeca-prev{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px}
+.navega{display:flex;align-items:center;gap:8px}
+.navega .bt{padding:5px 13px;font-size:17px;line-height:1}
+#contador{
+  font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--apagado);
+  min-width:82px;text-align:center;
+}
+#preview{
+  background:#F6F8FA;border-radius:7px;padding:16px;
+  display:flex;justify-content:center;overflow:auto;
+}
+.colunas{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px}
+.ctrl{margin-top:13px}
+.amostras{display:flex;gap:6px}
+.am{
+  width:30px;height:26px;border-radius:5px;border:1px solid var(--regua);
+  cursor:pointer;padding:0;
+}
+.am:focus-visible{outline:2px solid var(--azul);outline-offset:2px}
+.palco.xadrez{
+  background-image:linear-gradient(45deg,#DCE2EA 25%,transparent 25%,transparent 75%,#DCE2EA 75%),
+                   linear-gradient(45deg,#DCE2EA 25%,transparent 25%,transparent 75%,#DCE2EA 75%);
+  background-size:16px 16px;background-position:0 0,8px 8px;
+}
+.dupla{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.divisor{height:1px;background:var(--regua);margin:15px 0}
+
+/* ---------- resultado ---------- */
+.numeros{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:16px}
+.num{background:var(--carta);border:1px solid var(--regua);border-radius:10px;padding:13px 15px}
+.num b{
+  font-family:'Barlow Condensed',sans-serif;font-size:32px;font-weight:800;
+  display:block;line-height:1;color:var(--azul);
+}
+.num span{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--apagado)}
+.num.alerta b{color:var(--laranja)}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{
+  font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--apagado);text-align:left;
+  padding:7px 9px;border-bottom:1px solid var(--regua);font-weight:400;
+}
+td{padding:7px 9px;border-bottom:1px solid #EDF1F6}
+tr:last-child td{border-bottom:0}
+.selo{
+  font-family:'JetBrains Mono',monospace;font-size:9px;padding:2px 6px;border-radius:3px;
+  text-transform:uppercase;letter-spacing:.05em;
+}
+.selo-ok{background:#E4F3EA;color:var(--ok)}
+.selo-erro{background:#FDECE2;color:#B04A12}
+.rolagem{max-height:330px;overflow:auto}
+
+.aviso{
+  background:#FFF8F3;border:1px solid #F5D3B8;border-left:3px solid var(--laranja);
+  border-radius:7px;padding:11px 13px;font-size:13px;line-height:1.55;margin-bottom:14px;
+}
+.aviso b{display:block;margin-bottom:2px}
+
+.barra{
+  position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--regua);
+  padding:11px 20px;display:flex;justify-content:space-between;align-items:center;gap:14px;
+  z-index:40;
+}
+.barra .resumo{font-size:12.5px;color:var(--apagado)}
+.oculto{display:none!important}
+
+/* ---------- impressao ---------- */
+@page{size:A4 portrait;margin:7mm}
+.folha{
+  width:196mm;
+  display:flex;flex-wrap:wrap;
+  align-content:flex-start;
+}
+.cartela{
+  position:relative;overflow:hidden;
+  background-repeat:no-repeat;background-size:100% 100%;
+  break-inside:avoid;
+}
+.cartela .cmp{
+  position:absolute;display:flex;line-height:1.03;
+}
+.cartela .cmp span{width:100%}
+
+@media print{
+  body{background:#fff}
+  header,main,.barra{display:none!important}
+  .print-root{display:block!important}
+  .folha{break-after:page;page-break-after:always}
+  .folha:last-child{break-after:auto;page-break-after:auto}
+  .cartela{
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="marca">
+    <h1>Gerador de Cartelas</h1>
+    <span>planilha + template &rarr; folha A4 pronta pra imprimir</span>
+  </div>
+  <div class="abas" role="tablist">
+    <button class="aba" role="tab" id="aba-1" aria-selected="true" onclick="verPainel(1)"><span class="n">1</span> Templates</button>
+    <button class="aba" role="tab" id="aba-2" aria-selected="false" onclick="verPainel(2)"><span class="n">2</span> Campos</button>
+    <button class="aba" role="tab" id="aba-3" aria-selected="false" onclick="verPainel(3)"><span class="n">3</span> Planilha</button>
+    <button class="aba" role="tab" id="aba-4" aria-selected="false" onclick="verPainel(4)"><span class="n">4</span> Imprimir</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ============ 1. TEMPLATES ============ -->
+<section class="painel" id="painel-1">
+  <h2>Templates</h2>
+  <p class="sub">Exporta cada arte do Canva em PNG <b>sem os textos</b> — só o fundo. Depois diz de qual aba da planilha ela é e se atende preço simples ou de/por.</p>
+
+  <div class="solta" id="solta-png" tabindex="0" role="button">
+    <strong>Soltar PNGs aqui</strong>
+    <small>ou clicar pra escolher &middot; pode mandar vários de uma vez</small>
+  </div>
+  <input type="file" id="in-png" accept="image/png,image/jpeg,image/webp" multiple hidden>
+
+  <div class="grade" id="lista-tpl"></div>
+</section>
+
+<!-- ============ 2. CAMPOS ============ -->
+<section class="painel" id="painel-2" hidden>
+  <h2>Campos</h2>
+  <p class="sub">Arrasta cada caixa pro lugar onde o texto entra na arte. O que tu vê aqui é exatamente o que sai impresso.</p>
+
+  <div class="cartao" style="padding:13px">
+    <label class="et" for="sel-tpl">Template em edição</label>
+    <select id="sel-tpl" onchange="trocarTpl(this.value)"></select>
+  </div>
+
+  <div class="oficina">
+    <div class="palco"><div class="tela" id="tela"></div></div>
+
+    <div class="ferramentas">
+      <label class="et">Campos</label>
+      <button class="campo-bt" data-campo="produto" onclick="selCampo('produto')">
+        <span>Nome do produto</span><span class="est" id="est-produto">—</span>
+      </button>
+      <button class="campo-bt" data-campo="variacao" onclick="selCampo('variacao')">
+        <span>Variação — o que vem em ( )</span><span class="est" id="est-variacao">—</span>
+      </button>
+      <button class="campo-bt" data-campo="unidade" onclick="selCampo('unidade')">
+        <span>Unidade (pc, cx, un…)</span><span class="est" id="est-unidade">—</span>
+      </button>
+      <button class="campo-bt" data-campo="preco_de" onclick="selCampo('preco_de')">
+        <span>Preço "de"</span><span class="est" id="est-preco_de">—</span>
+      </button>
+      <button class="campo-bt" data-campo="preco_por" onclick="selCampo('preco_por')">
+        <span>Preço "por"</span><span class="est" id="est-preco_por">—</span>
+      </button>
+
+      <div id="sem-campo" class="sub" style="margin:14px 0 0;font-size:12.5px">Escolhe um campo acima pra posicionar.</div>
+
+      <div id="edit-campo" class="oculto">
+        <div class="divisor"></div>
+        <div class="ctrl">
+          <label class="et" for="f-fonte">Fonte</label>
+          <select id="f-fonte" onchange="mudar('family',this.value)">
+            <option value="Quicksand">Quicksand</option>
+            <option value="Barlow Condensed">Barlow Condensed</option>
+            <option value="Anton">Anton</option>
+            <option value="Archivo Black">Archivo Black</option>
+            <option value="Bebas Neue">Bebas Neue</option>
+            <option value="Oswald">Oswald</option>
+            <option value="Montserrat">Montserrat</option>
+            <option value="Poppins">Poppins</option>
+            <option value="Inter">Inter</option>
+          </select>
+        </div>
+        <div class="ctrl dupla">
+          <div>
+            <label class="et" for="f-peso">Peso</label>
+            <select id="f-peso" onchange="mudar('weight',this.value)">
+              <option value="300">Leve</option><option value="400">Normal</option>
+              <option value="500">Médio</option><option value="600">Semi</option>
+              <option value="700">Negrito</option><option value="800">Extra</option>
+            </select>
+          </div>
+          <div>
+            <label class="et" for="f-cor">Cor</label>
+            <input type="color" id="f-cor" value="#FFFFFF" oninput="mudar('color',this.value)">
+          </div>
+        </div>
+        <div class="ctrl">
+          <label class="et">Cores rápidas</label>
+          <div class="amostras">
+            <button class="am" style="background:#FFFFFF" onclick="corRapida('#FFFFFF')" title="Branco" aria-label="Branco"></button>
+            <button class="am" style="background:#111111" onclick="corRapida('#111111')" title="Preto" aria-label="Preto"></button>
+            <button class="am" style="background:#1D4686" onclick="corRapida('#1D4686')" title="Azul" aria-label="Azul"></button>
+            <button class="am" style="background:#E37835" onclick="corRapida('#E37835')" title="Laranja" aria-label="Laranja"></button>
+            <button class="am" style="background:#E01F26" onclick="corRapida('#E01F26')" title="Vermelho" aria-label="Vermelho"></button>
+            <button class="am" style="background:#FFD400" onclick="corRapida('#FFD400')" title="Amarelo" aria-label="Amarelo"></button>
+          </div>
+        </div>
+        <div class="ctrl dupla">
+          <div>
+            <label class="et" for="f-tam">Tamanho</label>
+            <input type="number" id="f-tam" min="1" max="60" step="0.5" oninput="mudar('size',this.value)">
+          </div>
+          <div>
+            <label class="et" for="f-alin">Alinhamento</label>
+            <select id="f-alin" onchange="mudar('align',this.value)">
+              <option value="center">Centro</option><option value="flex-start">Esquerda</option><option value="flex-end">Direita</option>
+            </select>
+          </div>
+        </div>
+        <div class="ctrl">
+          <label class="et" for="f-caixa">Caixa</label>
+          <select id="f-caixa" onchange="mudar('transform',this.value)">
+            <option value="none">Como está</option><option value="uppercase">MAIÚSCULAS</option>
+          </select>
+        </div>
+        <div class="ctrl dupla">
+          <div>
+            <label class="et" for="f-risco">Riscado</label>
+            <select id="f-risco" onchange="mudar('risco',this.value)">
+              <option value="0">Não</option><option value="1">Sim</option>
+            </select>
+          </div>
+          <div>
+            <label class="et" for="f-quebra">Quebra linha</label>
+            <select id="f-quebra" onchange="mudar('quebra',this.value)">
+              <option value="0">Não</option><option value="1">Sim</option>
+            </select>
+          </div>
+        </div>
+        <div class="ctrl">
+          <label class="et" for="f-caber">Ajuste automático do tamanho</label>
+          <select id="f-caber" onchange="mudar('caber',this.value)">
+            <option value="2">Encolhe e cresce pra preencher</option>
+            <option value="1">Só encolhe se não couber</option>
+            <option value="0">Nenhum, tamanho fixo</option>
+          </select>
+        </div>
+        <div class="ctrl">
+          <label class="et" for="f-prefixo">Texto antes do valor</label>
+          <input type="text" id="f-prefixo" placeholder="R$ " oninput="mudar('prefixo',this.value)">
+        </div>
+        <div class="divisor"></div>
+        <button class="bt bt-vazio" style="width:100%" onclick="copiarPra()">Copiar ajustes pros outros templates</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 3. PLANILHA ============ -->
+<section class="painel" id="painel-3" hidden>
+  <h2>Planilha</h2>
+  <p class="sub">Coluna C é o nome do produto, G é o preço "de" e H é o preço "por". Só H preenchida vira cartela simples; G e H preenchidas viram de/por.</p>
+
+  <div class="solta" id="solta-xls" tabindex="0" role="button">
+    <strong>Soltar a planilha aqui</strong>
+    <small>.xlsx, .xls ou .csv &middot; lê todas as abas de uma vez</small>
+  </div>
+  <input type="file" id="in-xls" accept=".xlsx,.xls,.csv" hidden>
+
+  <div class="cartao" id="cx-linha" style="margin-top:16px;display:none">
+    <div class="dupla" style="max-width:340px">
+      <div>
+        <label class="et" for="f-inicio">Produtos começam na linha</label>
+        <input type="number" id="f-inicio" value="2" min="1" onchange="lerDados()">
+      </div>
+      <div>
+        <label class="et" for="f-moeda">Formato do preço</label>
+        <select id="f-moeda" onchange="lerDados()">
+          <option value="virgula">12,90</option>
+          <option value="cru">como está na planilha</option>
+        </select>
+      </div>
+    </div>
+    <div class="divisor"></div>
+    <label class="et">De onde vem cada informação</label>
+    <div class="colunas">
+      <div>
+        <label class="et" for="c-produto">Produto</label>
+        <select id="c-produto" onchange="lerDados()"></select>
+      </div>
+      <div>
+        <label class="et" for="c-variacao">Variação</label>
+        <select id="c-variacao" onchange="lerDados()"></select>
+      </div>
+      <div>
+        <label class="et" for="c-de">Preço "de"</label>
+        <select id="c-de" onchange="lerDados()"></select>
+      </div>
+      <div>
+        <label class="et" for="c-por">Preço "por"</label>
+        <select id="c-por" onchange="lerDados()"></select>
+      </div>
+      <div>
+        <label class="et" for="c-unidade">Unidade</label>
+        <select id="c-unidade" onchange="lerDados()"></select>
+      </div>
+    </div>
+  </div>
+
+  <div id="saida-plan"></div>
+</section>
+
+<!-- ============ 4. IMPRIMIR ============ -->
+<section class="painel" id="painel-4" hidden>
+  <h2>Imprimir</h2>
+  <p class="sub">Define o tamanho da cartela e manda pra impressora. Na janela de impressão, escolhe "Salvar como PDF" se quiser guardar o arquivo.</p>
+
+  <div class="cartao">
+    <div class="dupla" style="max-width:420px">
+      <div>
+        <label class="et" for="f-larg">Largura da cartela (mm)</label>
+        <input type="number" id="f-larg" value="96" min="20" max="196" onchange="montarPreview()">
+      </div>
+      <div>
+        <label class="et" for="f-esp">Espaço entre elas (mm)</label>
+        <input type="number" id="f-esp" value="3" min="0" max="20" onchange="montarPreview()">
+      </div>
+    </div>
+    <p class="sub" style="margin:12px 0 0;font-size:12.5px" id="cabe-info"></p>
+  </div>
+
+  <div id="numeros-fim" class="numeros"></div>
+  <div id="alertas-fim"></div>
+
+  <div class="cartao">
+    <div class="cabeca-prev">
+      <label class="et" style="margin:0">Prévia — uma por vez</label>
+      <div class="navega">
+        <button class="bt bt-vazio" onclick="passar(-1)" aria-label="Anterior">&lsaquo;</button>
+        <span id="contador">—</span>
+        <button class="bt bt-vazio" onclick="passar(1)" aria-label="Próxima">&rsaquo;</button>
+      </div>
+    </div>
+    <div id="preview"></div>
+    <div id="legenda-prev" class="sub" style="margin:10px 0 0;font-size:12.5px"></div>
+  </div>
+</section>
+
+</main>
+
+<div class="barra">
+  <div class="resumo" id="resumo">Nenhum template carregado ainda.</div>
+  <div style="display:flex;gap:8px">
+    <button class="bt bt-vazio" onclick="salvarConfig()">Salvar ajustes</button>
+    <button class="bt bt-vazio" onclick="document.getElementById('in-cfg').click()">Carregar</button>
+    <button class="bt bt-laranja bt-grande" id="bt-imprimir" onclick="imprimir()" disabled>Imprimir</button>
+  </div>
+</div>
+<input type="file" id="in-cfg" accept=".json" hidden>
+
+<div class="print-root" id="print-root"></div>
+
+<script>
+/* ================= estado ================= */
+const CAMPOS = ['produto','variacao','unidade','preco_de','preco_por'];
+const ROTULO = {produto:'produto', variacao:'variação', unidade:'un', preco_de:'de', preco_por:'por'};
+const VALOR = (c,l)=>({produto:l.produto, variacao:l.variacao, unidade:l.unidade, preco_de:l.de, preco_por:l.por}[c]);
+let templates = [];
+let abasPlanilha = [];
+let linhas = [];
+let tplAtual = null;
+let campoAtual = null;
+
+const BASE = {
+  produto:  {x:6,  y:14, w:88, h:16, size:8,   quebra:'1', transform:'uppercase', prefixo:'', caber:'2'},
+  variacao: {x:8,  y:31, w:84, h:11, size:5,   quebra:'1', transform:'uppercase', prefixo:'', caber:'1'},
+  unidade:  {x:72, y:64, w:20, h:6,  size:3.5, quebra:'0', transform:'uppercase', prefixo:'', caber:'1'},
+  preco_de: {x:6,  y:48, w:32, h:11, size:9,   quebra:'0', transform:'none', prefixo:'', caber:'1'},
+  preco_por:{x:40, y:52, w:52, h:14, size:13,  quebra:'0', transform:'none', prefixo:'', caber:'1'}
+};
+const padrao = c => ({
+  ativo:false,
+  ...BASE[c],
+  family:'Quicksand', weight:'700', color:'#FFFFFF',
+  align:'center',
+  risco:'0'
+});
+
+/* ================= navegacao ================= */
+function verPainel(n){
+  for(let i=1;i<=4;i++){
+    document.getElementById('painel-'+i).hidden = (i!==n);
+    document.getElementById('aba-'+i).setAttribute('aria-selected', i===n);
+  }
+  if(n===4) montarPreview();
+}
+
+/* ================= 1. templates ================= */
+function ligarSolta(zonaId, inputId, acao){
+  const z = document.getElementById(zonaId), i = document.getElementById(inputId);
+  z.onclick = ()=> i.click();
+  z.onkeydown = e => { if(e.key==='Enter'||e.key===' '){ e.preventDefault(); i.click(); } };
+  z.ondragover = e => { e.preventDefault(); z.classList.add('quente'); };
+  z.ondragleave = ()=> z.classList.remove('quente');
+  z.ondrop = e => { e.preventDefault(); z.classList.remove('quente'); acao(e.dataTransfer.files); };
+  i.onchange = ()=> { acao(i.files); i.value=''; };
+}
+ligarSolta('solta-png','in-png', arqs => {
+  [...arqs].forEach(a=>{
+    if(!a.type.startsWith('image/')) return;
+    const fr = new FileReader();
+    fr.onload = ()=>{
+      const img = new Image();
+      img.onload = ()=>{
+        const campos = {}; CAMPOS.forEach(c=> campos[c]=padrao(c));
+        templates.push({
+          id:'t'+Date.now()+Math.random().toString(36).slice(2,6),
+          nome:a.name.replace(/\.[^.]+$/,''),
+          src:fr.result, w:img.width, h:img.height,
+          aba:'', tipo:'simples', campos
+        });
+        pintarTemplates(); atualizarRodape();
+      };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(a);
+  });
+});
+ligarSolta('solta-xls','in-xls', arqs => { if(arqs[0]) lerPlanilha(arqs[0]); });
+
+function pintarTemplates(){
+  const el = document.getElementById('lista-tpl');
+  if(!templates.length){ el.innerHTML=''; return; }
+  const ops = abasPlanilha.length
+    ? abasPlanilha.map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join('')
+    : '';
+  el.innerHTML = templates.map((t,i)=>`
+    <div class="tpl">
+      <div class="mini"><img src="${t.src}" alt="${esc(t.nome)}"></div>
+      <div class="corpo">
+        <div class="nome" title="${esc(t.nome)}">${esc(t.nome)}</div>
+        <div class="linha2">
+          <div>
+            <label class="et">Aba</label>
+            ${abasPlanilha.length
+              ? `<select onchange="setTpl(${i},'aba',this.value)"><option value="">—</option>${ops}</select>`
+              : `<input type="text" value="${esc(t.aba)}" placeholder="nome da aba" onchange="setTpl(${i},'aba',this.value)">`}
+          </div>
+          <div>
+            <label class="et">Tipo</label>
+            <select onchange="setTpl(${i},'tipo',this.value)">
+              <option value="simples">Simples</option>
+              <option value="depor">De / Por</option>
+            </select>
+          </div>
+        </div>
+        <div class="rodape-tpl">
+          <button class="bt bt-azul" style="flex:1;padding:7px" onclick="editar('${t.id}')">Ajustar campos</button>
+          <button class="bt bt-fraco" onclick="apagarTpl(${i})" aria-label="Remover template">Remover</button>
+        </div>
+      </div>
+    </div>`).join('');
+  templates.forEach((t,i)=>{
+    const c = el.children[i];
+    const selAba = c.querySelector('select'), selTipo = c.querySelectorAll('select')[abasPlanilha.length?1:0];
+    if(abasPlanilha.length && selAba) selAba.value = t.aba;
+    if(selTipo) selTipo.value = t.tipo;
+  });
+}
+function setTpl(i,k,v){ templates[i][k]=v; atualizarRodape(); if(k==='aba'||k==='tipo') lerDados(); }
+function apagarTpl(i){
+  if(tplAtual===templates[i].id) tplAtual=null;
+  templates.splice(i,1); pintarTemplates(); pintarSeletor(); atualizarRodape(); lerDados();
+}
+function editar(id){ tplAtual=id; verPainel(2); pintarSeletor(); pintarTela(); }
+
+/* ================= 2. campos ================= */
+function pintarSeletor(){
+  const s = document.getElementById('sel-tpl');
+  s.innerHTML = templates.map(t=>`<option value="${t.id}">${esc(t.nome)}</option>`).join('');
+  if(!tplAtual && templates.length) tplAtual = templates[0].id;
+  if(tplAtual) s.value = tplAtual;
+}
+function trocarTpl(id){ tplAtual=id; campoAtual=null; pintarTela(); }
+const achaTpl = ()=> templates.find(t=>t.id===tplAtual);
+
+function pintarTela(){
+  const t = achaTpl(), tela = document.getElementById('tela');
+  if(!t){ tela.innerHTML='<p class="sub">Carrega um template na aba 1 primeiro.</p>'; return; }
+  tela.innerHTML = `<img src="${t.src}" alt="">` + CAMPOS.map(c=>{
+    const f = t.campos[c];
+    if(!f.ativo) return '';
+    const sel = campoAtual===c ? '1':'0';
+    return `<div class="caixa" data-c="${c}" data-sel="${sel}"
+      style="left:${f.x}%;top:${f.y}%;width:${f.w}%;height:${f.h}%;align-items:center;justify-content:${f.align}">
+      <span class="tag">${ROTULO[c]}</span>
+      <span class="txt" style="font-family:'${f.family}';font-weight:${f.weight};color:${f.color};
+        text-align:${f.align==='center'?'center':(f.align==='flex-end'?'right':'left')};
+        text-transform:${f.transform};text-decoration:${f.risco==='1'?'line-through':'none'};
+        white-space:${f.quebra==='1'?'normal':'nowrap'};
+        font-size:${f.size}px">${exemplo(c,f)}</span>
+      ${sel==='1'?'<span class="puxador"></span>':''}
+    </div>`;
+  }).join('');
+  ajustarFontes();
+  CAMPOS.forEach(c=>{
+    const b = document.querySelector(`.campo-bt[data-campo="${c}"]`);
+    const e = document.getElementById('est-'+c);
+    const on = t.campos[c].ativo;
+    b.setAttribute('data-on', campoAtual===c ? '1':'0');
+    e.textContent = on ? 'no lugar' : 'desligado';
+    e.className = on ? 'est viva' : 'est';
+  });
+  ligarArraste();
+  pintarControles();
+}
+function exemplo(c,f){
+  const t = achaTpl();
+  const real = linhas.find(l=>l.tplId===(t&&t.id));
+  const fake = {produto:'Massa Orquídea 500g', variacao:'Parafuso · Penne · Espaguete',
+                unidade:'pc', de:'12,90', por:'9,90'};
+  const v = VALOR(c, real||fake) || VALOR(c, fake);
+  return esc((f.prefixo||'') + v);
+}
+/* ajusta a fonte pra ocupar bem a caixa: 1 = só encolhe, 2 = encolhe e cresce */
+function encolher(raiz){
+  const estoura = (sp,cx)=> sp.scrollWidth > cx.clientWidth+1 || sp.scrollHeight > cx.clientHeight+1;
+  raiz.querySelectorAll('[data-caber="1"],[data-caber="2"]').forEach(cx=>{
+    const sp = cx.firstElementChild;
+    if(!sp || !cx.clientHeight) return;
+    let px = parseFloat(getComputedStyle(sp).fontSize);
+    const base = px;
+    if(cx.getAttribute('data-caber')==='2' && !estoura(sp,cx)){
+      let g = 0;
+      while(g++ < 40 && px < base*2.4){
+        const tenta = px*1.05;
+        sp.style.fontSize = tenta+'px';
+        if(estoura(sp,cx)){ sp.style.fontSize = px+'px'; break; }
+        px = tenta;
+      }
+    }
+    let g = 0;
+    while(g++ < 60 && px > base*0.35 && estoura(sp,cx)){
+      px *= 0.94;
+      sp.style.fontSize = px+'px';
+    }
+  });
+}
+/* converte tamanho % da altura do template em px na tela */
+function ajustarFontes(){
+  const t = achaTpl(); if(!t) return;
+  const img = document.querySelector('#tela img'); if(!img) return;
+  const alt = img.clientHeight || 1;
+  document.querySelectorAll('#tela .caixa').forEach(cx=>{
+    const f = t.campos[cx.dataset.c];
+    cx.querySelector('.txt').style.fontSize = (f.size/100*alt) + 'px';
+    cx.setAttribute('data-caber', f.caber ?? '1');
+  });
+  document.querySelectorAll('#tela .caixa').forEach(cx=>{
+    const sp = cx.querySelector('.txt');
+    const m = cx.getAttribute('data-caber');
+    if(!sp || m==='0' || !cx.clientHeight) return;
+    const estoura = ()=> sp.scrollWidth > cx.clientWidth+1 || sp.scrollHeight > cx.clientHeight+1;
+    let px = parseFloat(sp.style.fontSize), base = px, g = 0;
+    if(m==='2' && !estoura()){
+      while(g++ < 40 && px < base*2.4){
+        const tenta = px*1.05;
+        sp.style.fontSize = tenta+'px';
+        if(estoura()){ sp.style.fontSize = px+'px'; break; }
+        px = tenta;
+      }
+    }
+    g = 0;
+    while(g++ < 60 && px > base*0.35 && estoura()){
+      px *= 0.94; sp.style.fontSize = px+'px';
+    }
+  });
+}
+window.addEventListener('resize', ajustarFontes);
+
+function selCampo(c){
+  const t = achaTpl(); if(!t) return;
+  campoAtual = c;
+  if(!t.campos[c].ativo) t.campos[c].ativo = true;
+  pintarTela();
+}
+function pintarControles(){
+  const t = achaTpl();
+  const cx = document.getElementById('edit-campo'), vazio = document.getElementById('sem-campo');
+  if(!t || !campoAtual){ cx.classList.add('oculto'); vazio.classList.remove('oculto'); return; }
+  cx.classList.remove('oculto'); vazio.classList.add('oculto');
+  const f = t.campos[campoAtual];
+  document.getElementById('f-fonte').value = f.family;
+  document.getElementById('f-peso').value = f.weight;
+  document.getElementById('f-cor').value = f.color;
+  document.getElementById('f-tam').value = f.size;
+  document.getElementById('f-alin').value = f.align;
+  document.getElementById('f-caixa').value = f.transform;
+  document.getElementById('f-risco').value = f.risco;
+  document.getElementById('f-caber').value = f.caber ?? '1';
+  document.getElementById('f-quebra').value = f.quebra ?? '0';
+  document.getElementById('f-prefixo').value = f.prefixo;
+}
+function corRapida(hex){
+  document.getElementById('f-cor').value = hex;
+  mudar('color', hex);
+}
+function alternarXadrez(on){ document.querySelector('.palco').classList.toggle('xadrez', on); }
+function mudar(k,v){
+  const t = achaTpl(); if(!t||!campoAtual) return;
+  t.campos[campoAtual][k] = (k==='size') ? parseFloat(v)||1 : v;
+  pintarTela();
+}
+function copiarPra(){
+  const t = achaTpl(); if(!t||!campoAtual) return;
+  const f = {...t.campos[campoAtual]};
+  let n = 0;
+  templates.forEach(o=>{ if(o.id!==t.id){ o.campos[campoAtual] = {...f}; n++; } });
+  alert(n ? `Ajustes do campo copiados pra ${n} template(s).` : 'Não há outro template pra copiar.');
+}
+
+/* arraste e redimensionamento */
+function ligarArraste(){
+  const tela = document.getElementById('tela');
+  tela.querySelectorAll('.caixa').forEach(cx=>{
+    cx.onpointerdown = e=>{
+      if(e.target.classList.contains('puxador')) return;
+      e.preventDefault();
+      campoAtual = cx.dataset.c; pintarTela();
+      const alvo = document.querySelector(`.caixa[data-c="${campoAtual}"]`);
+      arrastar(e, alvo, 'mover');
+    };
+    const p = cx.querySelector('.puxador');
+    if(p) p.onpointerdown = e=>{ e.preventDefault(); e.stopPropagation(); arrastar(e, cx, 'medir'); };
+  });
+}
+function arrastar(e0, cx, modo){
+  const t = achaTpl(), c = cx.dataset.c, f = t.campos[c];
+  const tela = document.getElementById('tela').getBoundingClientRect();
+  const ix = e0.clientX, iy = e0.clientY, i = {...f};
+  const mover = e=>{
+    const dx = (e.clientX-ix)/tela.width*100, dy = (e.clientY-iy)/tela.height*100;
+    if(modo==='mover'){
+      f.x = Math.max(-5, Math.min(100-i.w+5, i.x+dx));
+      f.y = Math.max(-5, Math.min(100-i.h+5, i.y+dy));
+    }else{
+      f.w = Math.max(5, Math.min(105-i.x, i.w+dx));
+      f.h = Math.max(3, Math.min(105-i.y, i.h+dy));
+    }
+    cx.style.left=f.x+'%'; cx.style.top=f.y+'%'; cx.style.width=f.w+'%'; cx.style.height=f.h+'%';
+  };
+  const soltar = ()=>{
+    window.removeEventListener('pointermove',mover);
+    window.removeEventListener('pointerup',soltar);
+  };
+  window.addEventListener('pointermove',mover);
+  window.addEventListener('pointerup',soltar);
+}
+
+/* ================= 3. planilha ================= */
+let pastaXls = null;
+function lerPlanilha(arq){
+  const fr = new FileReader();
+  fr.onload = e=>{
+    try{
+      pastaXls = XLSX.read(e.target.result,{type:'array'});
+      abasPlanilha = pastaXls.SheetNames;
+      document.getElementById('cx-linha').style.display='block';
+      pintarTemplates();
+      lerDados();
+    }catch(err){
+      document.getElementById('saida-plan').innerHTML =
+        `<div class="aviso"><b>Não deu pra abrir esse arquivo</b>Confere se é .xlsx, .xls ou .csv. Erro: ${esc(err.message)}</div>`;
+    }
+  };
+  fr.readAsArrayBuffer(arq);
+}
+/* mapeamento de colunas — índice numérico ou palavra-chave */
+const COLPAD = {produto:2, variacao:'paren', de:6, por:7, unidade:'preco'};
+function letras(n){ let s=''; n++; while(n>0){ const r=(n-1)%26; s=String.fromCharCode(65+r)+s; n=Math.floor((n-1)/26); } return s; }
+function montarSelColunas(){
+  const opcoes = n=>Array.from({length:26},(_,i)=>`<option value="${i}">${letras(i)}</option>`).join('');
+  const extras = {
+    variacao:`<option value="paren">o que estiver entre ( )</option><option value="">não usar</option>`,
+    unidade:`<option value="preco">junto do preço</option><option value="">não usar</option>`,
+    de:`<option value="">não usar</option>`, por:'', produto:''
+  };
+  Object.keys(COLPAD).forEach(k=>{
+    const s = document.getElementById('c-'+k);
+    if(!s || s.dataset.pronto) return;
+    s.innerHTML = extras[k] + opcoes();
+    s.value = String(COLPAD[k]);
+    s.dataset.pronto = '1';
+  });
+}
+function colDe(k){
+  const s = document.getElementById('c-'+k);
+  const v = s ? s.value : String(COLPAD[k]);
+  return (v==='paren'||v==='preco'||v==='') ? v : parseInt(v);
+}
+function lerDados(){
+  if(!pastaXls) return;
+  montarSelColunas();
+  const inicio = Math.max(1, parseInt(document.getElementById('f-inicio').value)||2);
+  const modo = document.getElementById('f-moeda').value;
+  const cP = colDe('produto'), cV = colDe('variacao'),
+        cD = colDe('de'), cH = colDe('por'), cU = colDe('unidade');
+  linhas = [];
+  abasPlanilha.forEach(nome=>{
+    const grade = XLSX.utils.sheet_to_json(pastaXls.Sheets[nome], {header:1, defval:''});
+    for(let r=inicio-1; r<grade.length; r++){
+      const l = grade[r]||[];
+      const bruto = String(l[cP]??'').trim();
+      const g = cD==='' ? {valor:'',unidade:''} : fatiar(l[cD], modo);
+      const h = fatiar(l[cH], modo);
+      let {produto, variacao} = separarParenteses(bruto);
+      if(cV !== 'paren'){
+        variacao = (cV==='') ? '' : String(l[cV]??'').trim();
+        if(cV==='') produto = bruto.replace(/\s+/g,' ').trim();
+      }
+      if(!produto || !h.valor) continue;
+      const unidade = cU==='preco' ? (h.unidade || g.unidade || '')
+                    : (cU==='' ? '' : String(l[cU]??'').trim());
+      const tipo = g.valor ? 'depor' : 'simples';
+      const tpl = templates.find(t=>t.aba===nome && t.tipo===tipo);
+      linhas.push({aba:nome, linha:r+1, produto, variacao, unidade,
+                   de:g.valor, por:h.valor, tipo, tplId: tpl?tpl.id:null});
+    }
+  });
+  pintarPlanilha(); atualizarRodape();
+}
+/* separa o valor da abreviação de unidade que vem junto na célula */
+function fatiar(v, modo){
+  if(v===''||v===null||v===undefined) return {valor:'', unidade:''};
+  if(typeof v === 'number') return {valor: normalizar(v, modo), unidade:''};
+  let s = String(v).trim().replace(/r\$/ig,' ');
+  const achados = s.match(/[a-zA-ZçÇãÃáÁéÉíÍóÓúÚ]+\.?/g) || [];
+  const unidade = achados.join(' ').replace(/\s+/g,' ').trim();
+  const resto = s.replace(/[a-zA-ZçÇãÃáÁéÉíÍóÓúÚ]+\.?/g,' ').replace(/\s+/g,' ').trim();
+  return {valor: normalizar(resto, modo), unidade};
+}
+/* MASSA ORQUÍDEA 500G (PARAFUSO, PENNE) -> nome + variação */
+function separarParenteses(bruto){
+  const partes = [];
+  const produto = bruto
+    .replace(/\(([^)]*)\)/g, (_,g)=>{ partes.push(g.trim()); return ' '; })
+    .replace(/\s+/g,' ').trim();
+  return {produto, variacao: partes.filter(Boolean).join(' · ')};
+}
+function normalizar(v, modo){
+  if(v===''||v===null||v===undefined) return '';
+  if(modo==='cru') return String(v).trim();
+  let n = typeof v==='number' ? v : parseFloat(String(v).replace(/[^\d,.-]/g,'').replace(/\.(?=\d{3}\b)/g,'').replace(',','.'));
+  if(isNaN(n)) return String(v).trim();
+  return n.toLocaleString('pt-BR',{minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function pintarPlanilha(){
+  const el = document.getElementById('saida-plan');
+  if(!linhas.length){
+    el.innerHTML = `<div class="aviso"><b>Nenhum produto encontrado</b>Confere se os produtos estão na coluna C e o preço "por" na coluna H, e se a linha inicial está certa.</div>`;
+    return;
+  }
+  const semTpl = linhas.filter(l=>!l.tplId);
+  const porAba = {};
+  linhas.forEach(l=>{
+    porAba[l.aba] = porAba[l.aba] || {simples:0, depor:0, orfas:0};
+    porAba[l.aba][l.tipo]++;
+    if(!l.tplId) porAba[l.aba].orfas++;
+  });
+  el.innerHTML = `
+    <div class="numeros" style="margin-top:16px">
+      <div class="num"><b>${linhas.length}</b><span>produtos</span></div>
+      <div class="num"><b>${linhas.filter(l=>l.tipo==='simples').length}</b><span>simples</span></div>
+      <div class="num"><b>${linhas.filter(l=>l.tipo==='depor').length}</b><span>de / por</span></div>
+      <div class="num ${semTpl.length?'alerta':''}"><b>${semTpl.length}</b><span>sem template</span></div>
+    </div>
+    ${semTpl.length ? `<div class="aviso"><b>${semTpl.length} produto(s) sem template</b>
+      Falta um template marcado com a aba e o tipo correspondente. Volta na aba 1 e confere o par de cada uma.</div>` : ''}
+    <div class="cartao">
+      <label class="et">Por aba</label>
+      <table>
+        <thead><tr><th>Aba</th><th>Simples</th><th>De/Por</th><th>Situação</th></tr></thead>
+        <tbody>${Object.entries(porAba).map(([a,v])=>`
+          <tr><td>${esc(a)}</td><td>${v.simples}</td><td>${v.depor}</td>
+          <td><span class="selo ${v.orfas?'selo-erro':'selo-ok'}">${v.orfas?v.orfas+' sem template':'pronta'}</span></td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="cartao">
+      <label class="et">Produtos lidos</label>
+      <div class="rolagem"><table>
+        <thead><tr><th>Aba</th><th>L.</th><th>Produto</th><th>Variação</th><th>Un.</th><th>De</th><th>Por</th><th></th></tr></thead>
+        <tbody>${linhas.map(l=>`<tr>
+          <td>${esc(l.aba)}</td><td style="color:var(--apagado);font-family:'JetBrains Mono',monospace;font-size:11px">${l.linha}</td>
+          <td>${esc(l.produto)}</td>
+          <td style="color:var(--apagado);font-size:12px">${esc(l.variacao||'—')}</td>
+          <td style="font-family:'JetBrains Mono',monospace;font-size:11px">${esc(l.unidade||'—')}</td>
+          <td>${esc(l.de||'—')}</td><td><b>${esc(l.por)}</b></td>
+          <td><span class="selo ${l.tplId?'selo-ok':'selo-erro'}">${l.tplId?l.tipo:'sem template'}</span></td></tr>`).join('')}
+        </tbody>
+      </table></div>
+    </div>`;
+}
+
+/* ================= 4. impressao ================= */
+function htmlCartela(l, larguraMm){
+  const t = templates.find(x=>x.id===l.tplId);
+  if(!t) return '';
+  const alturaMm = larguraMm * (t.h/t.w);
+  const temVar = !!l.variacao && t.campos.variacao.ativo;
+  // sem variação, o nome herda a faixa que sobrou
+  const area = c=>{
+    const f = t.campos[c];
+    if(c==='produto' && !temVar && t.campos.variacao.ativo){
+      const v = t.campos.variacao;
+      const topo = Math.min(f.y, v.y);
+      const base = Math.max(f.y+f.h, v.y+v.h);
+      return {x:f.x, y:topo, w:f.w, h:base-topo};
+    }
+    return {x:f.x, y:f.y, w:f.w, h:f.h};
+  };
+  const cmp = c=>{
+    const f = t.campos[c];
+    if(!f.ativo) return '';
+    const v = VALOR(c, l);
+    if(!v) return '';
+    const a = area(c);
+    const tamMm = (f.size/100) * alturaMm;
+    return `<div class="cmp" data-caber="${f.caber ?? '1'}" style="left:${a.x}%;top:${a.y}%;width:${a.w}%;height:${a.h}%;
+      align-items:center;justify-content:${f.align}">
+      <span style="font-family:'${f.family}',sans-serif;font-weight:${f.weight};color:${f.color};
+        font-size:${tamMm.toFixed(2)}mm;
+        text-align:${f.align==='center'?'center':(f.align==='flex-end'?'right':'left')};
+        text-transform:${f.transform};text-decoration:${f.risco==='1'?'line-through':'none'};
+        white-space:${f.quebra==='1'?'normal':'nowrap'};
+        ">${esc((f.prefixo||'')+v)}</span></div>`;
+  };
+  return `<div class="cartela" style="width:${larguraMm}mm;height:${alturaMm.toFixed(2)}mm;
+    background-image:url('${t.src}')">${CAMPOS.map(cmp).join('')}</div>`;
+}
+function montarFolhas(){
+  const larg = parseFloat(document.getElementById('f-larg').value)||96;
+  const esp  = parseFloat(document.getElementById('f-esp').value)||0;
+  const uteis = linhas.filter(l=>l.tplId);
+  if(!uteis.length) return {html:'', porFolha:0, folhas:0, larg, esp};
+
+  // agrupa por template pra nao misturar alturas na mesma linha
+  const grupos = {};
+  uteis.forEach(l=>{ (grupos[l.tplId] = grupos[l.tplId]||[]).push(l); });
+
+  const LARG_A4 = 196, ALT_A4 = 283;
+  let html = '', folhas = 0, porFolha = 0;
+  Object.entries(grupos).forEach(([id, itens])=>{
+    const t = templates.find(x=>x.id===id);
+    const altMm = larg * (t.h/t.w);
+    const cols = Math.max(1, Math.floor((LARG_A4+esp)/(larg+esp)));
+    const rows = Math.max(1, Math.floor((ALT_A4+esp)/(altMm+esp)));
+    const cap = cols*rows;
+    porFolha = Math.max(porFolha, cap);
+    for(let i=0;i<itens.length;i+=cap){
+      folhas++;
+      html += `<div class="folha" style="gap:${esp}mm">` +
+        itens.slice(i,i+cap).map(l=>htmlCartela(l, larg)).join('') + `</div>`;
+    }
+  });
+  return {html, porFolha, folhas, larg, esp};
+}
+let iPrev = 0;
+function passar(d){
+  const uteis = linhas.filter(l=>l.tplId);
+  if(!uteis.length) return;
+  iPrev = (iPrev + d + uteis.length) % uteis.length;
+  pintarPreview();
+}
+function pintarPreview(){
+  const uteis = linhas.filter(l=>l.tplId);
+  const pv = document.getElementById('preview');
+  const cont = document.getElementById('contador');
+  const leg = document.getElementById('legenda-prev');
+  if(!uteis.length){ pv.innerHTML=''; cont.textContent='—'; leg.textContent=''; return; }
+  if(iPrev >= uteis.length) iPrev = 0;
+  const l = uteis[iPrev];
+  cont.textContent = `${iPrev+1} de ${uteis.length}`;
+  pv.innerHTML = htmlCartela(l, 78);
+  leg.textContent = `${l.aba} · linha ${l.linha} · ${l.tipo==='depor'?'de/por':'simples'}`;
+  const fim = ()=>encolher(pv);
+  (document.fonts && document.fonts.ready) ? document.fonts.ready.then(fim) : fim();
+}
+function montarPreview(){
+  const uteis = linhas.filter(l=>l.tplId);
+  const nums = document.getElementById('numeros-fim');
+  const alertas = document.getElementById('alertas-fim');
+  const info = document.getElementById('cabe-info');
+
+  if(!uteis.length){
+    nums.innerHTML=''; pintarPreview();
+    alertas.innerHTML = `<div class="aviso"><b>Falta ligar as pontas</b>Carrega os templates na aba 1, posiciona os campos na 2 e manda a planilha na 3.</div>`;
+    info.textContent=''; document.getElementById('bt-imprimir').disabled = true;
+    return;
+  }
+  const r = montarFolhas();
+  const semPos = templates.filter(t=> !CAMPOS.some(c=>t.campos[c].ativo));
+  nums.innerHTML = `
+    <div class="num"><b>${uteis.length}</b><span>cartelas</span></div>
+    <div class="num"><b>${r.folhas}</b><span>folhas A4</span></div>
+    <div class="num"><b>${r.porFolha}</b><span>por folha</span></div>`;
+  alertas.innerHTML = semPos.length
+    ? `<div class="aviso"><b>${semPos.length} template(s) sem nenhum campo posicionado</b>Vão sair só com a arte de fundo, sem texto: ${esc(semPos.map(t=>t.nome).join(', '))}</div>`
+    : '';
+  info.textContent = `Cabem ${r.porFolha} cartelas por folha nessa largura.`;
+  pintarPreview();
+  document.getElementById('bt-imprimir').disabled = false;
+}
+function imprimir(){
+  const r = montarFolhas();
+  if(!r.html){ alert('Nenhuma cartela pronta pra imprimir.'); return; }
+  const raiz = document.getElementById('print-root');
+  raiz.innerHTML = r.html;
+  // torna mensurável fora da tela pra calcular o encolhimento
+  raiz.style.cssText = 'display:block;position:absolute;left:-99999px;top:0';
+  document.fonts.ready.then(()=>{
+    encolher(raiz);
+    raiz.style.cssText = '';
+    setTimeout(()=>window.print(), 80);
+  });
+}
+
+/* ================= config ================= */
+function salvarConfig(){
+  const cfg = {versao:1, templates};
+  const b = new Blob([JSON.stringify(cfg)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(b);
+  a.download = 'cartelas-ajustes.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+document.getElementById('in-cfg').onchange = e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const fr = new FileReader();
+  fr.onload = ()=>{
+    try{
+      const cfg = JSON.parse(fr.result);
+      templates = cfg.templates||[];
+      tplAtual = templates.length ? templates[0].id : null;
+      pintarTemplates(); pintarSeletor(); pintarTela(); lerDados(); atualizarRodape();
+    }catch(err){ alert('Arquivo de ajustes inválido.'); }
+  };
+  fr.readAsText(f); e.target.value='';
+};
+
+/* ================= util ================= */
+function esc(s){ return String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function atualizarRodape(){
+  const pares = templates.filter(t=>t.aba).length;
+  const prontas = linhas.filter(l=>l.tplId).length;
+  document.getElementById('resumo').textContent = templates.length
+    ? `${templates.length} template(s) · ${pares} com aba definida · ${prontas} cartela(s) prontas`
+    : 'Nenhum template carregado ainda.';
+  document.getElementById('bt-imprimir').disabled = prontas===0;
+}
+pintarSeletor(); pintarTela();
+</script>
+</body>
+</html>

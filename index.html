@@ -191,6 +191,10 @@ button{font-family:'Inter',sans-serif}
   background:#F6F8FA;border-radius:7px;padding:16px;
   display:flex;justify-content:center;overflow:auto;
 }
+.peso-tpl{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--apagado);margin:-5px 0 8px}
+.diag-ok{color:var(--ok);font-weight:600}
+.diag-ruim{color:#B04A12;font-weight:600}
+#diag-saida td:first-child{color:var(--apagado)}
 .colunas{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px}
 .ctrl{margin-top:13px}
 .amostras{display:flex;gap:6px}
@@ -284,7 +288,7 @@ tr:last-child td{border-bottom:0}
   <div class="marca">
     <h1>Gerador de Cartelas</h1>
     <span>planilha + template &rarr; folha A4 pronta pra imprimir</span>
-    <span class="versao">v7</span>
+    <span class="versao">v9</span>
   </div>
   <div class="abas" role="tablist">
     <button class="aba" role="tab" id="aba-1" aria-selected="true" onclick="verPainel(1)"><span class="n">1</span> Templates</button>
@@ -308,6 +312,14 @@ tr:last-child td{border-bottom:0}
   <input type="file" id="in-png" accept="image/png,image/jpeg,image/webp" multiple hidden>
 
   <div class="grade" id="lista-tpl"></div>
+
+  <div style="margin-top:18px">
+    <button class="bt bt-vazio" onclick="diagnosticar()">Testar salvamento</button>
+  </div>
+  <div class="cartao" id="painel-diag" style="display:none;margin-top:12px">
+    <label class="et">Diagnóstico</label>
+    <div id="diag-saida"></div>
+  </div>
 </section>
 
 <!-- ============ 2. CAMPOS ============ -->
@@ -589,6 +601,23 @@ function ligarSolta(zonaId, inputId, acao){
   z.ondrop = e => { e.preventDefault(); z.classList.remove('quente'); acao(e.dataTransfer.files); };
   i.onchange = ()=> { acao(i.files); i.value=''; };
 }
+/* reduz o PNG a um tamanho adequado pra impressão, cortando o peso do banco */
+const LARG_MAX = 1200; // 96mm impressos a ~300dpi pedem ~1134px
+function comprimir(img){
+  const escala = Math.min(1, LARG_MAX/img.width);
+  const w = Math.round(img.width*escala), h = Math.round(img.height*escala);
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, w, h);
+  // webp preserva transparência e pesa bem menos; jpeg como reserva
+  let saida = c.toDataURL('image/webp', 0.92);
+  if(!saida.startsWith('data:image/webp')) saida = c.toDataURL('image/jpeg', 0.9);
+  return {src: saida, w, h};
+}
+function peso(txt){ return (txt.length/1048576); }
+
 ligarSolta('solta-png','in-png', arqs => {
   [...arqs].forEach(a=>{
     if(!a.type.startsWith('image/')) return;
@@ -596,11 +625,14 @@ ligarSolta('solta-png','in-png', arqs => {
     fr.onload = ()=>{
       const img = new Image();
       img.onload = ()=>{
+        const antes = peso(fr.result);
+        const red = comprimir(img);
         const campos = {}; CAMPOS.forEach(c=> campos[c]=padrao(c));
         templates.push({
           id:'t'+Date.now()+Math.random().toString(36).slice(2,6),
           nome:a.name.replace(/\.[^.]+$/,''),
-          src:fr.result, w:img.width, h:img.height,
+          src:red.src, w:red.w, h:red.h,
+          origem:{mb:antes.toFixed(2), px:img.width+'×'+img.height},
           aba:'', tipo:'simples', campos
         });
         pintarTemplates(); atualizarRodape(); marcarSujo();
@@ -623,6 +655,7 @@ function pintarTemplates(){
       <div class="mini"><img src="${t.src}" alt="${esc(t.nome)}"></div>
       <div class="corpo">
         <div class="nome" title="${esc(t.nome)}">${esc(t.nome)}</div>
+        <div class="peso-tpl">${t.w}\u00d7${t.h} px \u00b7 ${(t.src.length/1048576).toFixed(2)} MB</div>
         <div class="linha2">
           <div>
             <label class="et">Aba</label>
@@ -1164,6 +1197,23 @@ function migrarTemplates(lista){
     return {...t, campos, aba: t.aba||'', tipo: t.tipo||'simples'};
   });
 }
+/* templates carregados de json antigo ainda vêm pesados: comprime na chegada */
+function comprimirExistentes(){
+  const pesados = templates.filter(t=> t.src && peso(t.src) > 0.5);
+  if(!pesados.length) return Promise.resolve(0);
+  return Promise.all(pesados.map(t=> new Promise(res=>{
+    const img = new Image();
+    img.onload = ()=>{
+      if(img.width > LARG_MAX){
+        const red = comprimir(img);
+        t.src = red.src; t.w = red.w; t.h = red.h;
+      }
+      res();
+    };
+    img.onerror = ()=>res();
+    img.src = t.src;
+  }))).then(()=>pesados.length);
+}
 function aplicarEstado(cfg){
   templates = migrarTemplates(cfg.templates);
   tplAtual = templates.length ? templates[0].id : null;
@@ -1172,6 +1222,9 @@ function aplicarEstado(cfg){
   põe('f-larg', cfg.larg); põe('f-esp', cfg.esp);
   if(cfg.cols) window.__colsPend = cfg.cols;
   pintarTemplates(); pintarSeletor(); pintarTela(); lerDados(); atualizarRodape();
+  comprimirExistentes().then(n=>{
+    if(n){ pintarTemplates(); pintarTela(); marcarSujo(); }
+  });
 }
 function marcarSujo(){
   if(!nuvemOk || ignorarEco) return;
@@ -1181,8 +1234,14 @@ function marcarSujo(){
 }
 function gravar(){
   if(!refCfg) return;
+  const carga = JSON.stringify(estadoAtual());
+  const mb = peso(carga);
+  if(mb > 9){
+    pintarSelo('erro', `configuração com ${mb.toFixed(1)} MB, grande demais pra nuvem`);
+    return;
+  }
   refCfg.set(estadoAtual())
-    .then(()=> pintarSelo('salvo'))
+    .then(()=> pintarSelo('salvo', mb.toFixed(2)+' MB'))
     .catch(e=> pintarSelo('erro', e.message));
 }
 function pintarSelo(estado, extra){
@@ -1190,10 +1249,10 @@ function pintarSelo(estado, extra){
   if(!e) return;
   const hora = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
   const mapa = {
-    salvo:   ['salvo na nuvem às '+hora, 'ok'],
+    salvo:   ['salvo na nuvem às '+hora+(extra?' · '+extra:''), 'ok'],
     salvando:['salvando…', ''],
     off:     ['sem conexão com a nuvem — usa Salvar cópia', 'ruim'],
-    erro:    ['falha ao salvar'+(extra?': '+extra:''), 'ruim']
+    erro:    ['NÃO SALVOU'+(extra?' — '+extra:''), 'ruim']
   };
   const [txt, cls] = mapa[estado] || mapa.off;
   e.textContent = txt;
@@ -1239,6 +1298,54 @@ function limparSalvos(){
   templates = []; linhas = []; tplAtual = null;
   pintarTemplates(); pintarSeletor(); pintarTela(); atualizarRodape();
   if(refCfg) refCfg.set(estadoAtual()).then(()=>pintarSelo('salvo'));
+}
+
+/* ================= diagnóstico ================= */
+async function diagnosticar(){
+  const cx = document.getElementById('painel-diag');
+  const saida = document.getElementById('diag-saida');
+  cx.style.display = 'block';
+  const L = [];
+  const põe = (rot, val, bom)=> L.push(
+    `<tr><td>${esc(rot)}</td><td class="${bom===undefined?'':(bom?'diag-ok':'diag-ruim')}">${esc(String(val))}</td></tr>`);
+
+  saida.innerHTML = '<p class="sub" style="margin:0">Testando…</p>';
+
+  põe('Versão do app', document.querySelector('.versao')?.textContent || '?');
+  põe('SDK do Firebase', typeof firebase !== 'undefined' ? 'carregado' : 'NÃO carregou',
+      typeof firebase !== 'undefined');
+  põe('Conexão ativa', nuvemOk ? 'sim' : 'não', nuvemOk);
+  põe('Templates na memória', templates.length, templates.length>0);
+
+  const bruto = JSON.stringify(estadoAtual());
+  const mb = bruto.length/1048576;
+  põe('Tamanho da configuração', mb.toFixed(2)+' MB', mb < 8);
+  if(mb >= 8) L.push('<tr><td colspan="2" class="diag-ruim">Acima de 8 MB o Firebase recusa a gravação. Os PNGs dos templates são o peso.</td></tr>');
+
+  try{
+    const t0 = Date.now();
+    const teste = firebase.database().ref('cartelas/teste');
+    await teste.set({carimbo: t0});
+    const snap = await teste.once('value');
+    const voltou = snap.val();
+    await teste.remove();
+    const ok = !!(voltou && voltou.carimbo===t0);
+    põe('Escrita e leitura de teste', ok ? 'funcionou em '+(Date.now()-t0)+' ms' : 'voltou diferente', ok);
+  }catch(err){
+    põe('Escrita e leitura de teste', 'FALHOU: '+err.message, false);
+  }
+
+  try{
+    await refCfg.set(estadoAtual());
+    const snap = await refCfg.once('value');
+    const salvo = snap.val();
+    const n = salvo && salvo.templates ? salvo.templates.length : 0;
+    põe('Configuração na nuvem', n+' template(s) confirmados', n===templates.length && n>0);
+  }catch(err){
+    põe('Configuração na nuvem', 'FALHOU: '+err.message, false);
+  }
+
+  saida.innerHTML = `<table>${L.join('')}</table>`;
 }
 
 /* ================= app com ajustes embutidos ================= */

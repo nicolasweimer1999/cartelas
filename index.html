@@ -282,7 +282,7 @@ tr:last-child td{border-bottom:0}
   <div class="marca">
     <h1>Gerador de Cartelas</h1>
     <span>planilha + template &rarr; folha A4 pronta pra imprimir</span>
-    <span class="versao">v5</span>
+    <span class="versao">v6</span>
   </div>
   <div class="abas" role="tablist">
     <button class="aba" role="tab" id="aba-1" aria-selected="true" onclick="verPainel(1)"><span class="n">1</span> Templates</button>
@@ -534,6 +534,7 @@ tr:last-child td{border-bottom:0}
     <button class="bt bt-fraco" onclick="limparSalvos()">Limpar</button>
     <button class="bt bt-vazio" onclick="salvarConfig()">Salvar cópia</button>
     <button class="bt bt-vazio" onclick="document.getElementById('in-cfg').click()">Carregar</button>
+    <button class="bt bt-azul" id="bt-embutir" onclick="baixarApp()">Gravar no arquivo</button>
     <button class="bt bt-laranja bt-grande" id="bt-imprimir" onclick="imprimir()" disabled>Imprimir</button>
   </div>
 </div>
@@ -1200,7 +1201,12 @@ function pintarSelo(estado){
 }
 async function iniciarBanco(){
   banco = await abrirBanco();
-  if(!banco){ pintarSelo('off'); return; }
+  const embutida = window.__CFG && (window.__CFG.templates||[]).length ? window.__CFG : null;
+  if(!banco){
+    if(embutida){ aplicarEstado(embutida); }
+    pintarSelo('off');
+    return;
+  }
   bancoOk = true;
   try{
     const tx = banco.transaction('cfg','readonly');
@@ -1209,13 +1215,16 @@ async function iniciarBanco(){
       if(req.result && (req.result.templates||[]).length){
         aplicarEstado(req.result);
         pintarSelo('salvo');
+      }else if(embutida){
+        aplicarEstado(embutida);
+        pintarSelo('salvo');
       }else{
         const e = document.getElementById('selo-salvo');
         if(e){ e.textContent='salvamento automático ativo'; e.className='marca-salvo ok'; }
       }
     };
-    req.onerror = ()=> pintarSelo('off');
-  }catch(err){ pintarSelo('off'); }
+    req.onerror = ()=>{ if(embutida) aplicarEstado(embutida); pintarSelo('off'); };
+  }catch(err){ if(embutida) aplicarEstado(embutida); pintarSelo('off'); }
 }
 function limparSalvos(){
   if(!confirm('Apagar os templates e ajustes salvos neste navegador?')) return;
@@ -1223,6 +1232,40 @@ function limparSalvos(){
   templates = []; linhas = []; tplAtual = null;
   pintarTemplates(); pintarSeletor(); pintarTela(); atualizarRodape();
   pintarSelo('salvo');
+}
+
+/* ================= app com ajustes embutidos ================= */
+async function baixarApp(){
+  const bt = document.getElementById('bt-embutir');
+  const antes = bt.textContent;
+  bt.textContent = 'Montando…'; bt.disabled = true;
+  try{
+    const resp = await fetch(location.href, {cache:'no-store'});
+    if(!resp.ok) throw new Error('não deu pra ler o próprio arquivo');
+    let txt = await resp.text();
+    // marcadores montados em pedaços: o literal não pode existir no código-fonte,
+    // senão a limpeza apagaria esta própria função
+    const abre = '<scr'+'ipt id="cfgApp">', fecha = '</scr'+'ipt>';
+    const fim = '</bo'+'dy>';
+    const fuga = x => x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    const alvo = new RegExp(fuga(abre)+'[\\s\\S]*?'+fuga(fecha)+'\\s*','g');
+    txt = txt.replace(alvo, '');
+    const dados = JSON.stringify(estadoAtual()).replace(/</g,'\\u003c');
+    const corte = txt.lastIndexOf(fim);
+    if(corte < 0) throw new Error('estrutura do arquivo inesperada');
+    txt = txt.slice(0,corte) + abre + 'window.__CFG=' + dados + fecha + '\n' + txt.slice(corte);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([txt], {type:'text/html'}));
+    a.download = 'index.html';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    bt.textContent = 'Pronto — sobe no GitHub';
+    setTimeout(()=>{ bt.textContent = antes; bt.disabled = false; }, 3500);
+  }catch(err){
+    alert('Isso só funciona com o app aberto por um endereço https, como o do GitHub Pages. '
+        + 'Abrindo o arquivo direto do computador o navegador bloqueia a leitura.\n\nDetalhe: '+err.message);
+    bt.textContent = antes; bt.disabled = false;
+  }
 }
 
 /* ================= config ================= */

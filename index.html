@@ -193,6 +193,15 @@ button{font-family:'Inter',sans-serif}
   display:flex;justify-content:center;overflow:auto;
 }
 .peso-tpl{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--apagado);margin:-5px 0 8px}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+  border:1px solid var(--regua);background:#fff;border-radius:20px;
+  padding:6px 13px;font-size:13px;user-select:none;
+}
+.chip[data-on="1"]{border-color:var(--azul);background:#F2F6FC;font-weight:600;color:var(--azul)}
+.chip .qt{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--apagado)}
+.chip[data-on="1"] .qt{color:var(--azul)}
 .diag-ok{color:var(--ok);font-weight:600}
 .diag-ruim{color:#B04A12;font-weight:600}
 #diag-saida td:first-child{color:var(--apagado)}
@@ -289,7 +298,7 @@ tr:last-child td{border-bottom:0}
   <div class="marca">
     <h1>Gerador de Cartelas</h1>
     <span>planilha + template &rarr; folha A4 pronta pra imprimir</span>
-    <span class="versao">v11</span>
+    <span class="versao">v12</span>
   </div>
   <div class="abas" role="tablist">
     <button class="aba" role="tab" id="aba-1" aria-selected="true" onclick="verPainel(1)"><span class="n">1</span> Templates</button>
@@ -521,6 +530,15 @@ tr:last-child td{border-bottom:0}
     <p class="sub" style="margin:12px 0 0;font-size:12.5px" id="cabe-info"></p>
   </div>
 
+  <div class="cartao" id="cx-filtro" style="display:none">
+    <label class="et">O que baixar</label>
+    <div class="chips" id="lista-filtro"></div>
+    <div style="display:flex;gap:8px;margin-top:11px">
+      <button class="bt bt-fraco" onclick="filtroTodas(true)">Marcar todas</button>
+      <button class="bt bt-fraco" onclick="filtroTodas(false)">Desmarcar todas</button>
+    </div>
+  </div>
+
   <div id="numeros-fim" class="numeros"></div>
   <div id="alertas-fim"></div>
 
@@ -575,7 +593,7 @@ let campoAtual = null;
 const BASE = {
   produto:  {x:6,  y:14, w:88, h:16, size:8,   quebra:'1', transform:'uppercase', prefixo:'', caber:'2'},
   variacao: {x:8,  y:31, w:84, h:11, size:5,   quebra:'1', transform:'uppercase', prefixo:'', caber:'1'},
-  unidade:  {x:72, y:64, w:20, h:6,  size:3.5, quebra:'0', transform:'uppercase', prefixo:'', caber:'1'},
+  unidade:  {x:66, y:62, w:28, h:10, size:3.5, quebra:'1', transform:'uppercase', prefixo:'', caber:'2'},
   preco_de: {x:6,  y:48, w:32, h:11, size:9,   quebra:'0', transform:'none', prefixo:'', caber:'1'},
   preco_por:{x:40, y:52, w:52, h:14, size:13,  quebra:'0', transform:'none', prefixo:'', caber:'1'}
 };
@@ -954,15 +972,27 @@ function lerDados(){
   });
   pintarPlanilha(); atualizarRodape(); marcarSujo();
 }
-/* separa o valor da abreviação de unidade que vem junto na célula */
+/* separa o valor da unidade que vem junto na célula.
+   a unidade pode ser texto livre com números — "A CADA 100G", "LEVE 3 PAGUE 2" */
 function fatiar(v, modo){
   if(v===''||v===null||v===undefined) return {valor:'', unidade:''};
   if(typeof v === 'number') return {valor: normalizar(v, modo), unidade:''};
-  let s = String(v).trim().replace(/r\$/ig,' ');
-  const achados = s.match(/[a-zA-ZçÇãÃáÁéÉíÍóÓúÚ]+\.?/g) || [];
-  const unidade = achados.join(' ').replace(/\s+/g,' ').trim();
-  const resto = s.replace(/[a-zA-ZçÇãÃáÁéÉíÍóÓúÚ]+\.?/g,' ').replace(/\s+/g,' ').trim();
-  return {valor: normalizar(resto, modo), unidade};
+  let s = String(v).trim().replace(/r\$/ig,' ').replace(/\s+/g,' ').trim();
+  // o preço é o primeiro número com centavos; o resto todo é unidade
+  const moeda = s.match(/\d{1,3}(?:\.\d{3})+,\d{1,2}|\d+,\d{1,2}|\d+\.\d{2}(?!\d)/);
+  if(moeda){
+    const unidade = (s.slice(0,moeda.index) + ' ' + s.slice(moeda.index+moeda[0].length))
+      .replace(/\s+/g,' ').trim();
+    return {valor: normalizar(moeda[0], modo), unidade};
+  }
+  // sem centavos: primeiro número solto vira preço
+  const solto = s.match(/\d+(?:[.,]\d+)?/);
+  if(solto){
+    const unidade = (s.slice(0,solto.index) + ' ' + s.slice(solto.index+solto[0].length))
+      .replace(/\s+/g,' ').trim();
+    return {valor: normalizar(solto[0], modo), unidade};
+  }
+  return {valor:'', unidade:s};
 }
 /* MASSA ORQUÍDEA 500G (PARAFUSO, PENNE) -> nome + variação */
 function separarParenteses(bruto){
@@ -1067,7 +1097,7 @@ function htmlCartela(l, larguraMm){
 function montarFolhas(){
   const larg = parseFloat(document.getElementById('f-larg').value)||96;
   const esp  = parseFloat(document.getElementById('f-esp').value)||0;
-  const uteis = linhas.filter(l=>l.tplId);
+  const uteis = selecionadas();
   if(!uteis.length) return {html:'', porFolha:0, folhas:0, larg, esp};
 
   // agrupa por template pra nao misturar alturas na mesma linha
@@ -1092,14 +1122,42 @@ function montarFolhas(){
   return {html, porFolha, folhas, larg, esp};
 }
 let iPrev = 0;
+let filtroAbas = null;   // null = todas
+
+function selecionadas(){
+  return linhas.filter(l=> l.tplId && (!filtroAbas || filtroAbas.has(l.aba)));
+}
+function pintarFiltro(){
+  const cx = document.getElementById('cx-filtro');
+  const el = document.getElementById('lista-filtro');
+  const abas = [...new Set(linhas.filter(l=>l.tplId).map(l=>l.aba))];
+  if(abas.length < 2){ cx.style.display='none'; filtroAbas=null; return; }
+  cx.style.display='block';
+  if(!filtroAbas) filtroAbas = new Set(abas);
+  el.innerHTML = abas.map(a=>{
+    const n = linhas.filter(l=>l.tplId && l.aba===a).length;
+    return `<button class="chip" data-on="${filtroAbas.has(a)?1:0}" onclick="alternarAba('${esc(a).replace(/'/g,"\\'")}')">
+      ${esc(a)} <span class="qt">${n}</span></button>`;
+  }).join('');
+}
+function alternarAba(a){
+  if(!filtroAbas) filtroAbas = new Set();
+  filtroAbas.has(a) ? filtroAbas.delete(a) : filtroAbas.add(a);
+  iPrev = 0; montarPreview();
+}
+function filtroTodas(marcar){
+  const abas = [...new Set(linhas.filter(l=>l.tplId).map(l=>l.aba))];
+  filtroAbas = marcar ? new Set(abas) : new Set();
+  iPrev = 0; montarPreview();
+}
 function passar(d){
-  const uteis = linhas.filter(l=>l.tplId);
+  const uteis = selecionadas();
   if(!uteis.length) return;
   iPrev = (iPrev + d + uteis.length) % uteis.length;
   pintarPreview();
 }
 function pintarPreview(){
-  const uteis = linhas.filter(l=>l.tplId);
+  const uteis = selecionadas();
   const pv = document.getElementById('preview');
   const cont = document.getElementById('contador');
   const leg = document.getElementById('legenda-prev');
@@ -1113,7 +1171,8 @@ function pintarPreview(){
   (document.fonts && document.fonts.ready) ? document.fonts.ready.then(fim) : fim();
 }
 function montarPreview(){
-  const uteis = linhas.filter(l=>l.tplId);
+  const uteis = selecionadas();
+  pintarFiltro();
   const nums = document.getElementById('numeros-fim');
   const alertas = document.getElementById('alertas-fim');
   const info = document.getElementById('cabe-info');
@@ -1121,6 +1180,8 @@ function montarPreview(){
   if(!uteis.length){
     nums.innerHTML=''; pintarPreview();
     const motivos = [];
+    if(filtroAbas && filtroAbas.size===0 && linhas.some(l=>l.tplId))
+      motivos.push('nenhuma opção marcada em "O que baixar" logo acima');
     if(!templates.length) motivos.push('nenhum template carregado na etapa 1');
     if(templates.length && !templates.some(t=>t.aba)) motivos.push('nenhum template tem a aba definida na etapa 1');
     if(!pastaXls) motivos.push('a planilha ainda não foi carregada na etapa 3');
@@ -1406,7 +1467,7 @@ function nomeArquivo(l, i){
   return String(i+1).padStart(3,'0') + '-' + (limpo(l.produto) || 'cartela') + '.png';
 }
 async function baixarUmPng(){
-  const uteis = linhas.filter(l=>l.tplId);
+  const uteis = selecionadas();
   if(!uteis.length) return;
   const l = uteis[iPrev];
   await document.fonts.ready;
@@ -1417,7 +1478,7 @@ async function baixarUmPng(){
   a.click();
 }
 async function baixarTodosPng(){
-  const uteis = linhas.filter(l=>l.tplId);
+  const uteis = selecionadas();
   if(!uteis.length) return;
   const bt = document.getElementById('bt-zip');
   const antes = bt.textContent;
@@ -1437,7 +1498,11 @@ async function baixarTodosPng(){
     const blob = await zip.generateAsync({type:'blob'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'cartelas-' + new Date().toISOString().slice(0,10) + '.zip';
+    const abas = [...new Set(uteis.map(l=>l.aba))];
+    const rotulo = abas.length===1
+      ? abas[0].normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]/g,'-')
+      : 'todas';
+    a.download = `cartelas-${rotulo}-${new Date().toISOString().slice(0,10)}.zip`;
     a.click();
     URL.revokeObjectURL(a.href);
     bt.textContent = `Pronto — ${uteis.length} PNGs`;
@@ -1556,7 +1621,7 @@ document.getElementById('in-cfg').onchange = e=>{
 function esc(s){ return String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function atualizarRodape(){
   const pares = templates.filter(t=>t.aba).length;
-  const prontas = linhas.filter(l=>l.tplId).length;
+  const prontas = selecionadas().length;
   document.getElementById('resumo').textContent = templates.length
     ? `${templates.length} template(s) · ${pares} com aba definida · ${prontas} cartela(s) prontas`
     : 'Nenhum template carregado ainda.';

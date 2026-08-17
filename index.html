@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&family=Barlow+Condensed:wght@400;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&family=Anton&family=Archivo+Black&family=Bebas+Neue&family=Oswald:wght@400;600;700&family=Montserrat:wght@600;700;800&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
@@ -288,7 +289,7 @@ tr:last-child td{border-bottom:0}
   <div class="marca">
     <h1>Gerador de Cartelas</h1>
     <span>planilha + template &rarr; folha A4 pronta pra imprimir</span>
-    <span class="versao">v10</span>
+    <span class="versao">v11</span>
   </div>
   <div class="abas" role="tablist">
     <button class="aba" role="tab" id="aba-1" aria-selected="true" onclick="verPainel(1)"><span class="n">1</span> Templates</button>
@@ -534,6 +535,10 @@ tr:last-child td{border-bottom:0}
     </div>
     <div id="preview"></div>
     <div id="legenda-prev" class="sub" style="margin:10px 0 0;font-size:12.5px"></div>
+    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+      <button class="bt bt-vazio" onclick="baixarUmPng()">Baixar esta em .png</button>
+      <button class="bt bt-azul" id="bt-zip" onclick="baixarTodosPng()">Baixar todas em .png (zip)</button>
+    </div>
   </div>
 </section>
 
@@ -1297,6 +1302,150 @@ function limparSalvos(){
   templates = []; linhas = []; tplAtual = null;
   pintarTemplates(); pintarSeletor(); pintarTela(); atualizarRodape();
   if(refCfg) refCfg.set(estadoAtual()).then(()=>pintarSelo('salvo'));
+}
+
+/* ================= exportar PNG ================= */
+const cacheImg = {};
+function carregarImg(t){
+  if(cacheImg[t.id]) return Promise.resolve(cacheImg[t.id]);
+  return new Promise((res,rej)=>{
+    const i = new Image();
+    i.onload = ()=>{ cacheImg[t.id] = i; res(i); };
+    i.onerror = ()=> rej(new Error('imagem do template '+t.nome+' não carregou'));
+    i.src = t.src;
+  });
+}
+function quebrarTexto(ctx, txt, larg, quebra){
+  if(quebra !== '1') return [txt];
+  const palavras = String(txt).split(/\s+/);
+  const linhas = []; let atual = '';
+  palavras.forEach(p=>{
+    const tenta = atual ? atual+' '+p : p;
+    if(ctx.measureText(tenta).width <= larg || !atual) atual = tenta;
+    else { linhas.push(atual); atual = p; }
+  });
+  if(atual) linhas.push(atual);
+  return linhas;
+}
+async function desenharCartela(l){
+  const t = templates.find(x=>x.id===l.tplId);
+  if(!t) return null;
+  const img = await carregarImg(t);
+  const W = t.w, H = t.h;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0, 0, W, H);
+
+  const cp = x => t.campos[x] || padrao(x);
+  const temVar = !!l.variacao && cp('variacao').ativo;
+
+  CAMPOS.forEach(nome=>{
+    const f = cp(nome);
+    if(!f.ativo) return;
+    let txt = VALOR(nome, l);
+    if(!txt) return;
+    txt = (f.prefixo||'') + txt;
+    if(f.transform === 'uppercase') txt = txt.toUpperCase();
+
+    // mesma regra da tela: sem variação, o nome herda a faixa
+    let cx = f.x, cy = f.y, cw = f.w, ch = f.h;
+    if(nome==='produto' && !temVar && cp('variacao').ativo){
+      const v = cp('variacao');
+      const topo = Math.min(f.y, v.y), base = Math.max(f.y+f.h, v.y+v.h);
+      cy = topo; ch = base - topo;
+    }
+    const bx = cx/100*W, by = cy/100*H, bw = cw/100*W, bh = ch/100*H;
+
+    let px = f.size/100*H;
+    const base = px;
+    const fonte = tam => `${f.weight} ${tam}px "${f.family}", sans-serif`;
+    const cabe = tam=>{
+      ctx.font = fonte(tam);
+      const ls = quebrarTexto(ctx, txt, bw, f.quebra);
+      const maior = Math.max(...ls.map(s=>ctx.measureText(s).width));
+      return {ok: maior <= bw && ls.length*tam*1.08 <= bh, linhas: ls};
+    };
+    const modo = f.caber ?? '1';
+    if(modo === '2'){
+      let g = 0;
+      while(g++ < 40 && px < base*2.4 && cabe(px*1.05).ok) px *= 1.05;
+    }
+    if(modo !== '0'){
+      let g = 0;
+      while(g++ < 60 && px > base*0.35 && !cabe(px).ok) px *= 0.94;
+    }
+    const {linhas: ls} = cabe(px);
+
+    ctx.font = fonte(px);
+    ctx.fillStyle = f.color;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = f.align==='center' ? 'center' : (f.align==='flex-end' ? 'right' : 'left');
+    const ax = f.align==='center' ? bx+bw/2 : (f.align==='flex-end' ? bx+bw : bx);
+    const alturaLinha = px*1.08;
+    const total = ls.length*alturaLinha;
+    ls.forEach((linha,i)=>{
+      const y = by + bh/2 - total/2 + alturaLinha*(i+0.5);
+      ctx.fillText(linha, ax, y);
+      if(f.risco === '1'){
+        const larg = ctx.measureText(linha).width;
+        const x0 = ctx.textAlign==='center' ? ax-larg/2 : (ctx.textAlign==='right' ? ax-larg : ax);
+        ctx.save();
+        ctx.strokeStyle = f.color;
+        ctx.lineWidth = Math.max(1, px*0.07);
+        ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x0+larg, y); ctx.stroke();
+        ctx.restore();
+      }
+    });
+  });
+  return c;
+}
+function nomeArquivo(l, i){
+  const limpo = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-zA-Z0-9 ]/g,'').trim().replace(/\s+/g,'-').slice(0,45);
+  return String(i+1).padStart(3,'0') + '-' + (limpo(l.produto) || 'cartela') + '.png';
+}
+async function baixarUmPng(){
+  const uteis = linhas.filter(l=>l.tplId);
+  if(!uteis.length) return;
+  const l = uteis[iPrev];
+  await document.fonts.ready;
+  const c = await desenharCartela(l);
+  const a = document.createElement('a');
+  a.href = c.toDataURL('image/png');
+  a.download = nomeArquivo(l, iPrev);
+  a.click();
+}
+async function baixarTodosPng(){
+  const uteis = linhas.filter(l=>l.tplId);
+  if(!uteis.length) return;
+  const bt = document.getElementById('bt-zip');
+  const antes = bt.textContent;
+  bt.disabled = true;
+  try{
+    if(!window.JSZip) throw new Error('a biblioteca de zip não carregou — confere a internet');
+    await document.fonts.ready;
+    const zip = new JSZip();
+    for(let i=0;i<uteis.length;i++){
+      bt.textContent = `Gerando ${i+1} de ${uteis.length}…`;
+      const c = await desenharCartela(uteis[i]);
+      const b64 = c.toDataURL('image/png').split(',')[1];
+      zip.file(nomeArquivo(uteis[i], i), b64, {base64:true});
+      if(i % 8 === 0) await new Promise(r=>setTimeout(r,0)); // deixa a tela respirar
+    }
+    bt.textContent = 'Compactando…';
+    const blob = await zip.generateAsync({type:'blob'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'cartelas-' + new Date().toISOString().slice(0,10) + '.zip';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    bt.textContent = `Pronto — ${uteis.length} PNGs`;
+    setTimeout(()=>{ bt.textContent = antes; bt.disabled = false; }, 3500);
+  }catch(err){
+    alert('Não deu pra gerar os PNGs: '+err.message);
+    bt.textContent = antes; bt.disabled = false;
+  }
 }
 
 /* ================= diagnóstico ================= */

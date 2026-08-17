@@ -154,6 +154,7 @@ button{font-family:'Inter',sans-serif}
   background:rgba(227,120,53,.07);cursor:move;
   display:flex;overflow:hidden;
 }
+.caixa.colide{border-color:#D64516;border-style:dashed;background:rgba(214,69,22,.10)}
 .caixa[data-sel="1"]{border-color:var(--azul);border-width:2px;background:rgba(29,70,134,.09);z-index:3}
 .caixa .txt{width:100%;white-space:nowrap;line-height:1.05}
 .puxador{
@@ -304,7 +305,7 @@ tr:last-child td{border-bottom:0}
   <div class="marca">
     <h1>Gerador de Cartelas</h1>
     <span>planilha + template &rarr; folha A4 pronta pra imprimir</span>
-    <span class="versao">v5</span>
+    <span class="versao">v7</span>
   </div>
   <div class="abas" role="tablist">
     <button class="aba" role="tab" id="aba-1" aria-selected="true" onclick="verPainel(1)"><span class="n">1</span> Templates</button>
@@ -362,16 +363,17 @@ tr:last-child td{border-bottom:0}
       <button class="campo-bt" data-campo="unidade" onclick="selCampo('unidade')">
         <span>Unidade (pc, cx, un…)</span><span class="est" id="est-unidade">—</span>
       </button>
-      <button class="campo-bt" data-campo="validade" onclick="selCampo('validade')">
-        <span>Validade da oferta</span><span class="est" id="est-validade">—</span>
-      </button>
       <button class="campo-bt" data-campo="preco_de" onclick="selCampo('preco_de')">
         <span>Preço "de"</span><span class="est" id="est-preco_de">—</span>
       </button>
       <button class="campo-bt" data-campo="preco_por" onclick="selCampo('preco_por')">
         <span>Preço "por"</span><span class="est" id="est-preco_por">—</span>
       </button>
+      <button class="campo-bt" data-campo="validade" onclick="selCampo('validade')">
+        <span>Validade da oferta</span><span class="est" id="est-validade">—</span>
+      </button>
 
+      <div id="aviso-colisao" style="margin-top:13px"></div>
       <div id="sem-campo" class="sub" style="margin:14px 0 0;font-size:12.5px">Escolhe um campo acima pra posicionar.</div>
 
       <div id="edit-campo" class="oculto">
@@ -714,7 +716,7 @@ function pintarTemplates(){
             <label class="et">Aba</label>
             ${abasPlanilha.length
               ? `<select onchange="setTpl(${i},'aba',this.value)"><option value="">—</option>
-                  <option value="${ABA_BOA}">BOAS DO DIA (todas)</option>${ops}</select>`
+                  <option value="${ABA_BOA}">BOAS DO DIA / FINDI (todas)</option>${ops}</select>`
               : `<input type="text" value="${esc(t.aba)}" placeholder="nome da aba" onchange="setTpl(${i},'aba',this.value)">`}
           </div>
           <div>
@@ -783,6 +785,33 @@ function pintarTela(){
   });
   ligarArraste();
   pintarControles();
+  avisarColisao();
+}
+
+/* marca caixas que se cruzam — a causa mais comum de texto por cima de texto */
+function avisarColisao(){
+  const t = achaTpl();
+  const nota = document.getElementById('aviso-colisao');
+  if(!t || !nota) return;
+  const ativos = CAMPOS.filter(c => (t.campos[c]||{}).ativo);
+  const cruza = (a,b)=>{
+    const A = t.campos[a], B = t.campos[b];
+    return A.x < B.x+B.w && B.x < A.x+A.w && A.y < B.y+B.h && B.y < A.y+A.h;
+  };
+  const pares = [];
+  for(let i=0;i<ativos.length;i++)
+    for(let j=i+1;j<ativos.length;j++)
+      if(cruza(ativos[i], ativos[j])) pares.push([ativos[i], ativos[j]]);
+
+  document.querySelectorAll('#tela .caixa').forEach(cx=>{
+    const c = cx.dataset.c;
+    cx.classList.toggle('colide', pares.some(p=>p.includes(c)));
+  });
+  nota.innerHTML = pares.length
+    ? `<div class="aviso" style="margin:0"><b>Caixas sobrepostas</b>${
+        pares.map(p=>`${ROTULO[p[0]]} sobre ${ROTULO[p[1]]}`).join('<br>')
+      }<br><br>O texto de uma vai cair por cima da outra. Arrasta ou redimensiona pra separar.</div>`
+    : '';
 }
 function exemplo(c,f){
   const t = achaTpl();
@@ -811,7 +840,7 @@ function encolher(raiz){
       }
     }
     let g = 0;
-    while(g++ < 90 && px > base*0.22 && estoura(sp,cx)){
+    while(g++ < 140 && px > base*0.10 && estoura(sp,cx)){
       px *= 0.94;
       sp.style.fontSize = px+'px';
     }
@@ -842,7 +871,7 @@ function ajustarFontes(){
       }
     }
     g = 0;
-    while(g++ < 90 && px > base*0.22 && estoura()){
+    while(g++ < 140 && px > base*0.10 && estoura()){
       px *= 0.94; sp.style.fontSize = px+'px';
     }
   });
@@ -1045,16 +1074,20 @@ function montarTabelaValidade(){
 }
 
 /* ===== mapeamento de colunas, por aba, com detecção automática ===== */
+const MARCA_FINDI_SEC = /boa[s]?\s+do[s]?\s+(findi|fim\s+de\s+semana)/i;
+const MARCA_DIA_SEC   = /boa[s]?\s+do[s]?\s+dia/i;
 const MARCA_BOA = /boa[s]?\s+do[s]?\s+(dia|findi|fim\s+de\s+semana)/i;
 const ABA_FINDI = /findi|fim\s+de\s+semana/i;
 const ABA_BOA = '__BOA__';   // template de Boa do Dia serve pra qualquer aba
 /* só essas cartelas levam o texto de validade */
 const levaValidade = (aba, naBoa) => naBoa || ABA_FINDI.test(aba);
 const TIPOS = {
-  simples:   'Simples',
-  depor:     'De / Por',
-  boa:       'Boa do dia',
-  boa_depor: 'Boa do dia — de/por'
+  simples:         'Simples',
+  depor:           'De / Por',
+  boa:             'Boa do dia',
+  boa_depor:       'Boa do dia — de/por',
+  boa_findi:       'Boa do findi',
+  boa_findi_depor: 'Boa do findi — de/por'
 };
 const COLPAD = {produto:2, variacao:'paren', de:6, por:7, unidade:'preco'};
 let colsAba = {};   // { nomeDaAba: {produto, variacao, de, por, unidade} }
@@ -1161,12 +1194,17 @@ function lerDados(){
   abasPlanilha.forEach(nome=>{
     const c = colsAba[nome] || {...COLPAD};
     const grade = XLSX.utils.sheet_to_json(pastaXls.Sheets[nome], {header:1, defval:''});
-    let naBoa = false;
+    let secao = null;   // null | 'dia' | 'findi'
     for(let r=inicio-1; r<grade.length; r++){
       const l = grade[r]||[];
       const bruto = String(l[c.produto]??'').trim();
-      // a partir do marcador, tudo que vier na aba é Boa do Dia
-      if(MARCA_BOA.test(bruto) || (l||[]).some(v=>MARCA_BOA.test(String(v??'')))){ naBoa = true; continue; }
+      // o marcador define em qual seção entramos, e vale até o fim da aba
+      const marcador = (l||[]).map(v=>String(v??'')).find(v=>MARCA_BOA.test(v));
+      if(marcador){
+        secao = MARCA_FINDI_SEC.test(marcador) ? 'findi'
+              : (MARCA_DIA_SEC.test(marcador) ? 'dia' : 'dia');
+        continue;
+      }
       const g = c.de==='' ? {valor:'',unidade:''} : fatiar(l[c.de], modo);
       const h = fatiar(l[c.por], modo);
       let {produto, variacao} = separarParenteses(bruto);
@@ -1177,13 +1215,14 @@ function lerDados(){
       if(!produto || !h.valor) continue;
       const unidade = c.unidade==='preco' ? (h.unidade || g.unidade || '')
                     : (c.unidade==='' ? '' : String(l[c.unidade]??'').trim());
-      const tipo = naBoa ? (g.valor ? 'boa_depor' : 'boa')
-                         : (g.valor ? 'depor' : 'simples');
+      const tipo = secao === 'findi' ? (g.valor ? 'boa_findi_depor' : 'boa_findi')
+                 : secao === 'dia'   ? (g.valor ? 'boa_depor' : 'boa')
+                 :                     (g.valor ? 'depor' : 'simples');
       let tpl = templates.find(t=>t.aba===nome && t.tipo===tipo);
-      if(!tpl && naBoa) tpl = templates.find(t=>t.aba===ABA_BOA && t.tipo===tipo);
+      if(!tpl && secao) tpl = templates.find(t=>t.aba===ABA_BOA && t.tipo===tipo);
       linhas.push({aba:nome, linha:r+1, produto, variacao, unidade,
-                   validade: levaValidade(nome, naBoa) ? frasePara(nome) : '',
-                   de:g.valor, por:h.valor, tipo, boa:naBoa, tplId: tpl?tpl.id:null});
+                   validade: levaValidade(nome, !!secao) ? frasePara(nome) : '',
+                   de:g.valor, por:h.valor, tipo, boa:!!secao, secao, tplId: tpl?tpl.id:null});
     }
   });
   montarTabelaColunas(); montarTabelaValidade(); pintarFiltro();
@@ -1235,7 +1274,7 @@ function pintarPlanilha(){
   const semTpl = linhas.filter(l=>!l.tplId);
   const porAba = {};
   linhas.forEach(l=>{
-    porAba[l.aba] = porAba[l.aba] || {simples:0, depor:0, boa:0, boa_depor:0, orfas:0};
+    porAba[l.aba] = porAba[l.aba] || {simples:0, depor:0, boa:0, boa_depor:0, boa_findi:0, boa_findi_depor:0, orfas:0};
     porAba[l.aba][l.tipo]++;
     if(!l.tplId) porAba[l.aba].orfas++;
   });
@@ -1252,10 +1291,11 @@ function pintarPlanilha(){
     <div class="cartao">
       <label class="et">Por aba</label>
       <table>
-        <thead><tr><th>Aba</th><th>Simples</th><th>De/Por</th><th>Boa do dia</th><th>Situação</th></tr></thead>
+        <thead><tr><th>Aba</th><th>Simples</th><th>De/Por</th><th>Boa dia</th><th>Boa findi</th><th>Situação</th></tr></thead>
         <tbody>${Object.entries(porAba).map(([a,v])=>`
           <tr><td>${esc(a)}</td><td>${v.simples}</td><td>${v.depor}</td>
           <td>${v.boa + v.boa_depor}</td>
+          <td>${v.boa_findi + v.boa_findi_depor}</td>
           <td><span class="selo ${v.orfas?'selo-erro':'selo-ok'}">${v.orfas?v.orfas+' sem template':'pronta'}</span></td></tr>`).join('')}
         </tbody>
       </table>
@@ -1664,7 +1704,7 @@ async function desenharCartela(l){
     }
     if(modo !== '0'){
       let g = 0;
-      while(g++ < 90 && px > base*0.22 && !cabe(px).ok) px *= 0.94;
+      while(g++ < 140 && px > base*0.10 && !cabe(px).ok) px *= 0.94;
     }
     const {linhas: ls} = cabe(px);
 

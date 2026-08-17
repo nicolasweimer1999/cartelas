@@ -181,6 +181,9 @@ button{font-family:'Inter',sans-serif}
 }
 .marca-salvo.ok{color:var(--ok)}
 .marca-salvo.ruim{color:var(--laranja)}
+.cabeca-cols{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:12px}
+.sel-col{font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 6px;min-width:64px}
+#tab-colunas td{padding:5px 7px}
 .cabeca-prev{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px}
 .navega{display:flex;align-items:center;gap:8px}
 .navega .bt{padding:5px 13px;font-size:17px;line-height:1}
@@ -299,7 +302,7 @@ tr:last-child td{border-bottom:0}
   <div class="marca">
     <h1>Gerador de Cartelas</h1>
     <span>planilha + template &rarr; folha A4 pronta pra imprimir</span>
-    <span class="versao">v14</span>
+    <span class="versao">v1</span>
   </div>
   <div class="abas" role="tablist">
     <button class="aba" role="tab" id="aba-1" aria-selected="true" onclick="verPainel(1)"><span class="n">1</span> Templates</button>
@@ -474,7 +477,7 @@ tr:last-child td{border-bottom:0}
     <div class="dupla" style="max-width:340px">
       <div>
         <label class="et" for="f-inicio">Produtos começam na linha</label>
-        <input type="number" id="f-inicio" value="2" min="1" onchange="lerDados()">
+        <input type="number" id="f-inicio" value="2" min="1" onchange="redetectar()">
       </div>
       <div>
         <label class="et" for="f-moeda">Formato do preço</label>
@@ -485,29 +488,14 @@ tr:last-child td{border-bottom:0}
       </div>
     </div>
     <div class="divisor"></div>
-    <label class="et">De onde vem cada informação</label>
-    <div class="colunas">
-      <div>
-        <label class="et" for="c-produto">Produto</label>
-        <select id="c-produto" onchange="lerDados()"></select>
-      </div>
-      <div>
-        <label class="et" for="c-variacao">Variação</label>
-        <select id="c-variacao" onchange="lerDados()"></select>
-      </div>
-      <div>
-        <label class="et" for="c-de">Preço "de"</label>
-        <select id="c-de" onchange="lerDados()"></select>
-      </div>
-      <div>
-        <label class="et" for="c-por">Preço "por"</label>
-        <select id="c-por" onchange="lerDados()"></select>
-      </div>
-      <div>
-        <label class="et" for="c-unidade">Unidade</label>
-        <select id="c-unidade" onchange="lerDados()"></select>
-      </div>
+    <div class="cabeca-cols">
+      <label class="et" style="margin:0">Colunas de cada aba</label>
+      <button class="bt bt-fraco" onclick="redetectar()">Detectar de novo</button>
     </div>
+    <p class="sub" style="margin:0 0 12px;font-size:12.5px">
+      O app identifica sozinho onde está cada informação em cada aba. Só mexe aqui se alguma linha estiver errada.
+    </p>
+    <div class="rolagem"><table id="tab-colunas"></table></div>
   </div>
 
   <div id="saida-plan"></div>
@@ -947,59 +935,128 @@ function lerPlanilha(arq){
   };
   fr.readAsArrayBuffer(arq);
 }
-/* mapeamento de colunas — índice numérico ou palavra-chave */
+/* ===== mapeamento de colunas, por aba, com detecção automática ===== */
 const COLPAD = {produto:2, variacao:'paren', de:6, por:7, unidade:'preco'};
+let colsAba = {};   // { nomeDaAba: {produto, variacao, de, por, unidade} }
+
 function letras(n){ let s=''; n++; while(n>0){ const r=(n-1)%26; s=String.fromCharCode(65+r)+s; n=Math.floor((n-1)/26); } return s; }
-function montarSelColunas(){
-  const opcoes = n=>Array.from({length:26},(_,i)=>`<option value="${i}">${letras(i)}</option>`).join('');
-  const extras = {
-    variacao:`<option value="paren">o que estiver entre ( )</option><option value="">não usar</option>`,
-    unidade:`<option value="preco">junto do preço</option><option value="">não usar</option>`,
-    de:`<option value="">não usar</option>`, por:'', produto:''
+
+/* olha o cabeçalho e as primeiras linhas pra descobrir onde está cada coisa */
+function detectarColunas(grade, inicio){
+  const cab = (grade[0]||[]).map(v=>String(v??'').trim().toLowerCase());
+  const dados = grade.slice(inicio-1, inicio-1+40).filter(l=>l && l.some(c=>String(c??'').trim()));
+  const nCols = Math.max(cab.length, ...dados.map(l=>l.length), 8);
+
+  const temPreco = c => dados.filter(l=>{
+    const v = String(l[c]??'');
+    return /\d+[.,]\d{2}/.test(v);
+  }).length;
+  const temTexto = c => dados.filter(l=>{
+    const v = String(l[c]??'').trim();
+    return v.length > 3 && !/^\d+([.,]\d+)?$/.test(v) && !/\d+[.,]\d{2}/.test(v);
+  }).length;
+
+  // preços: primeiro pelo cabeçalho "de" e "por", senão pelas colunas com mais valores monetários
+  let de = cab.findIndex(h => h === 'de');
+  let por = cab.findIndex(h => h === 'por');
+  if(por < 0){
+    const ranking = [];
+    for(let c=0;c<nCols;c++) ranking.push([c, temPreco(c)]);
+    ranking.sort((a,b)=> b[1]-a[1] || b[0]-a[0]);
+    const comPreco = ranking.filter(r=>r[1] > dados.length*0.3).map(r=>r[0]).sort((a,b)=>a-b);
+    if(comPreco.length >= 2){ de = comPreco[comPreco.length-2]; por = comPreco[comPreco.length-1]; }
+    else if(comPreco.length === 1){ de = -1; por = comPreco[0]; }
+  }
+  if(de === por) de = -1;
+
+  // produto: coluna de texto mais preenchida, sempre à esquerda dos preços
+  let produto = -1, melhor = 0;
+  for(let c=0;c<nCols;c++){
+    if(por >= 0 && c >= por) break;
+    const n = temTexto(c);
+    if(n > melhor){ melhor = n; produto = c; }
+  }
+  if(produto < 0) produto = COLPAD.produto;
+
+  return {
+    produto,
+    variacao:'paren',
+    de: de >= 0 ? de : '',
+    por: por >= 0 ? por : COLPAD.por,
+    unidade:'preco'
   };
-  Object.keys(COLPAD).forEach(k=>{
-    const s = document.getElementById('c-'+k);
-    if(!s || s.dataset.pronto) return;
-    s.innerHTML = extras[k] + opcoes();
-    const salvo = window.__colsPend && window.__colsPend[k];
-    s.value = salvo != null ? salvo : String(COLPAD[k]);
-    s.dataset.pronto = '1';
+}
+function detectarTodas(forcar){
+  const inicio = Math.max(1, parseInt(document.getElementById('f-inicio')?.value)||2);
+  abasPlanilha.forEach(nome=>{
+    if(!forcar && colsAba[nome]) return;
+    const grade = XLSX.utils.sheet_to_json(pastaXls.Sheets[nome], {header:1, defval:''});
+    colsAba[nome] = detectarColunas(grade, inicio);
   });
 }
-function colDe(k){
-  const s = document.getElementById('c-'+k);
-  const v = s ? s.value : String(COLPAD[k]);
-  return (v==='paren'||v==='preco'||v==='') ? v : parseInt(v);
+function redetectar(){ detectarTodas(true); montarTabelaColunas(); lerDados(); }
+
+function montarTabelaColunas(){
+  const t = document.getElementById('tab-colunas');
+  if(!t) return;
+  const campos = [['produto','Produto'],['variacao','Variação'],['de','De'],['por','Por'],['unidade','Unidade']];
+  const extras = {
+    variacao:'<option value="paren">entre ( )</option><option value="">não usar</option>',
+    unidade:'<option value="preco">junto do preço</option><option value="">não usar</option>',
+    de:'<option value="">não tem</option>', por:'', produto:''
+  };
+  const opcoes = Array.from({length:26},(_,i)=>`<option value="${i}">${letras(i)}</option>`).join('');
+  t.innerHTML =
+    `<thead><tr><th>Aba</th>${campos.map(c=>`<th>${c[1]}</th>`).join('')}<th>Lidos</th></tr></thead><tbody>` +
+    abasPlanilha.map((nome,i)=>{
+      const cfg = colsAba[nome] || {...COLPAD};
+      const n = linhas.filter(l=>l.aba===nome).length;
+      return `<tr><td><b>${esc(nome)}</b></td>` + campos.map(([k])=>
+        `<td><select class="sel-col" onchange="setCol(${i},'${k}',this.value)">${extras[k]}${opcoes}</select></td>`
+      ).join('') + `<td class="${n?'diag-ok':'diag-ruim'}">${n}</td></tr>`;
+    }).join('') + '</tbody>';
+  // aplica os valores depois de renderizar
+  abasPlanilha.forEach((nome,i)=>{
+    const cfg = colsAba[nome] || {...COLPAD};
+    const sels = t.querySelectorAll('tbody tr')[i].querySelectorAll('select');
+    campos.forEach(([k], j)=>{ sels[j].value = String(cfg[k]); });
+  });
+}
+function setCol(i, k, v){
+  const nome = abasPlanilha[i];
+  if(!colsAba[nome]) colsAba[nome] = {...COLPAD};
+  colsAba[nome][k] = (v==='paren'||v==='preco'||v==='') ? v : parseInt(v);
+  lerDados();
 }
 function lerDados(){
   if(!pastaXls) return;
-  montarSelColunas();
+  detectarTodas(false);
   const inicio = Math.max(1, parseInt(document.getElementById('f-inicio').value)||2);
   const modo = document.getElementById('f-moeda').value;
-  const cP = colDe('produto'), cV = colDe('variacao'),
-        cD = colDe('de'), cH = colDe('por'), cU = colDe('unidade');
   linhas = [];
   abasPlanilha.forEach(nome=>{
+    const c = colsAba[nome] || {...COLPAD};
     const grade = XLSX.utils.sheet_to_json(pastaXls.Sheets[nome], {header:1, defval:''});
     for(let r=inicio-1; r<grade.length; r++){
       const l = grade[r]||[];
-      const bruto = String(l[cP]??'').trim();
-      const g = cD==='' ? {valor:'',unidade:''} : fatiar(l[cD], modo);
-      const h = fatiar(l[cH], modo);
+      const bruto = String(l[c.produto]??'').trim();
+      const g = c.de==='' ? {valor:'',unidade:''} : fatiar(l[c.de], modo);
+      const h = fatiar(l[c.por], modo);
       let {produto, variacao} = separarParenteses(bruto);
-      if(cV !== 'paren'){
-        variacao = (cV==='') ? '' : String(l[cV]??'').trim();
-        if(cV==='') produto = bruto.replace(/\s+/g,' ').trim();
+      if(c.variacao !== 'paren'){
+        variacao = (c.variacao==='') ? '' : String(l[c.variacao]??'').trim();
+        if(c.variacao==='') produto = bruto.replace(/\s+/g,' ').trim();
       }
       if(!produto || !h.valor) continue;
-      const unidade = cU==='preco' ? (h.unidade || g.unidade || '')
-                    : (cU==='' ? '' : String(l[cU]??'').trim());
+      const unidade = c.unidade==='preco' ? (h.unidade || g.unidade || '')
+                    : (c.unidade==='' ? '' : String(l[c.unidade]??'').trim());
       const tipo = g.valor ? 'depor' : 'simples';
       const tpl = templates.find(t=>t.aba===nome && t.tipo===tipo);
       linhas.push({aba:nome, linha:r+1, produto, variacao, unidade,
                    de:g.valor, por:h.valor, tipo, tplId: tpl?tpl.id:null});
     }
   });
+  montarTabelaColunas();
   pintarPlanilha(); atualizarRodape(); marcarSujo();
 }
 /* separa o valor da unidade que vem junto na célula.
@@ -1279,11 +1336,7 @@ function estadoAtual(){
     versao:3, templates,
     inicio: document.getElementById('f-inicio')?.value || '2',
     moeda: document.getElementById('f-moeda')?.value || 'virgula',
-    cols: Object.keys(COLPAD).reduce((a,k)=>{
-      const s = document.getElementById('c-'+k);
-      if(s && s.dataset.pronto) a[k] = s.value;
-      return a;
-    },{}),
+    colsAba,
     larg: document.getElementById('f-larg')?.value || '96',
     esp: document.getElementById('f-esp')?.value || '3',
     quando: Date.now()
@@ -1327,7 +1380,7 @@ function aplicarEstado(cfg){
   const põe = (id,v)=>{ const e=document.getElementById(id); if(e && v!=null) e.value=v; };
   põe('f-inicio', cfg.inicio); põe('f-moeda', cfg.moeda);
   põe('f-larg', cfg.larg); põe('f-esp', cfg.esp);
-  if(cfg.cols) window.__colsPend = cfg.cols;
+  if(cfg.colsAba) colsAba = cfg.colsAba;
   pintarTemplates(); pintarSeletor(); pintarTela(); lerDados(); atualizarRodape();
   comprimirExistentes().then(n=>{
     if(n){ pintarTemplates(); pintarTela(); marcarSujo(); }

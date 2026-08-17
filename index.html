@@ -182,6 +182,8 @@ button{font-family:'Inter',sans-serif}
 .marca-salvo.ok{color:var(--ok)}
 .marca-salvo.ruim{color:var(--laranja)}
 .cabeca-cols{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:12px}
+.mini-data{width:74px;font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 6px}
+.frase-prev{font-size:11.5px;color:var(--apagado);line-height:1.4}
 .sel-col{font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 6px;min-width:64px}
 #tab-colunas td{padding:5px 7px}
 .cabeca-prev{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px}
@@ -302,7 +304,7 @@ tr:last-child td{border-bottom:0}
   <div class="marca">
     <h1>Gerador de Cartelas</h1>
     <span>planilha + template &rarr; folha A4 pronta pra imprimir</span>
-    <span class="versao">v2</span>
+    <span class="versao">v5</span>
   </div>
   <div class="abas" role="tablist">
     <button class="aba" role="tab" id="aba-1" aria-selected="true" onclick="verPainel(1)"><span class="n">1</span> Templates</button>
@@ -359,6 +361,9 @@ tr:last-child td{border-bottom:0}
       </button>
       <button class="campo-bt" data-campo="unidade" onclick="selCampo('unidade')">
         <span>Unidade (pc, cx, un…)</span><span class="est" id="est-unidade">—</span>
+      </button>
+      <button class="campo-bt" data-campo="validade" onclick="selCampo('validade')">
+        <span>Validade da oferta</span><span class="est" id="est-validade">—</span>
       </button>
       <button class="campo-bt" data-campo="preco_de" onclick="selCampo('preco_de')">
         <span>Preço "de"</span><span class="est" id="est-preco_de">—</span>
@@ -473,6 +478,18 @@ tr:last-child td{border-bottom:0}
   </div>
   <input type="file" id="in-xls" accept=".xlsx,.xls,.csv" hidden>
 
+  <div class="cartao" id="cx-escolha" style="margin-top:16px;display:none;border-color:var(--azul)">
+    <div class="cabeca-cols">
+      <label class="et" style="margin:0">O que vamos gerar hoje</label>
+      <div style="display:flex;gap:6px">
+        <button class="bt bt-fraco" onclick="filtroTodas(true)">Todas</button>
+        <button class="bt bt-fraco" onclick="filtroTodas(false)">Nenhuma</button>
+      </div>
+    </div>
+    <div class="chips" id="lista-filtro-3"></div>
+    <p class="sub" id="nota-filtro-3" style="margin:11px 0 0;font-size:12.5px"></p>
+  </div>
+
   <div class="cartao" id="cx-linha" style="margin-top:16px;display:none">
     <div class="dupla" style="max-width:340px">
       <div>
@@ -496,6 +513,15 @@ tr:last-child td{border-bottom:0}
       O app identifica sozinho onde está cada informação em cada aba. Só mexe aqui se alguma linha estiver errada.
     </p>
     <div class="rolagem"><table id="tab-colunas"></table></div>
+
+    <div id="bloco-validade" style="display:none">
+      <div class="divisor"></div>
+      <label class="et">Validade das ofertas</label>
+      <p class="sub" style="margin:0 0 12px;font-size:12.5px">
+        Só as cartelas do Findi e das Boas do Dia levam esse texto. As datas saem do título da aba — corrige aqui se alguma vier errada.
+      </p>
+      <div class="rolagem"><table id="tab-validade"></table></div>
+    </div>
   </div>
 
   <div id="saida-plan"></div>
@@ -572,9 +598,9 @@ tr:last-child td{border-bottom:0}
 
 <script>
 /* ================= estado ================= */
-const CAMPOS = ['produto','variacao','unidade','preco_de','preco_por'];
-const ROTULO = {produto:'produto', variacao:'variação', unidade:'un', preco_de:'de', preco_por:'por'};
-const VALOR = (c,l)=>({produto:l.produto, variacao:l.variacao, unidade:l.unidade, preco_de:l.de, preco_por:l.por}[c]);
+const CAMPOS = ['produto','variacao','unidade','preco_de','preco_por','validade'];
+const ROTULO = {produto:'produto', variacao:'variação', unidade:'un', preco_de:'de', preco_por:'por', validade:'validade'};
+const VALOR = (c,l)=>({produto:l.produto, variacao:l.variacao, unidade:l.unidade, preco_de:l.de, preco_por:l.por, validade:l.validade}[c]);
 let templates = [];
 let abasPlanilha = [];
 let linhas = [];
@@ -592,7 +618,9 @@ const BASE = {
   preco_de: {x:6,  y:48, w:32, h:11, size:9,   quebra:'0', transform:'none', prefixo:'', caber:'1',
              family:'Poppins', color:LARANJA},
   preco_por:{x:40, y:52, w:52, h:14, size:13,  quebra:'0', transform:'none', prefixo:'', caber:'1',
-             family:'Poppins', color:BRANCO}
+             family:'Poppins', color:BRANCO},
+  validade: {x:5,  y:86, w:90, h:5,  size:1.6, quebra:'1', transform:'uppercase', prefixo:'', caber:'1',
+             family:'Poppins', color:BRANCO, weight:'600'}
 };
 /* padrão da casa, aplicável a templates já configurados */
 const PADRAO_CASA = {
@@ -685,7 +713,8 @@ function pintarTemplates(){
           <div>
             <label class="et">Aba</label>
             ${abasPlanilha.length
-              ? `<select onchange="setTpl(${i},'aba',this.value)"><option value="">—</option>${ops}</select>`
+              ? `<select onchange="setTpl(${i},'aba',this.value)"><option value="">—</option>
+                  <option value="${ABA_BOA}">BOAS DO DIA (todas)</option>${ops}</select>`
               : `<input type="text" value="${esc(t.aba)}" placeholder="nome da aba" onchange="setTpl(${i},'aba',this.value)">`}
           </div>
           <div>
@@ -759,7 +788,8 @@ function exemplo(c,f){
   const t = achaTpl();
   const real = linhas.find(l=>l.tplId===(t&&t.id));
   const fake = {produto:'Massa Orquídea 500g', variacao:'Parafuso · Penne · Espaguete',
-                unidade:'pc', de:'12,90', por:'9,90'};
+                unidade:'pc', de:'12,90', por:'9,90',
+                validade:'Ofertas válidas para as lojas de Bom Princípio e São Sebastião do Caí de 14/08 a 16/08'};
   const v = VALOR(c, real||fake) || VALOR(c, fake);
   return esc((f.prefixo||'') + v);
 }
@@ -925,6 +955,7 @@ function lerPlanilha(arq){
       pastaXls = XLSX.read(e.target.result,{type:'array'});
       abasPlanilha = pastaXls.SheetNames;
       document.getElementById('cx-linha').style.display='block';
+      document.getElementById('cx-escolha').style.display='block';
       pintarTemplates();
       lerDados();
     }catch(err){
@@ -934,8 +965,91 @@ function lerPlanilha(arq){
   };
   fr.readAsArrayBuffer(arq);
 }
+/* ===== validade das ofertas ===== */
+let validadeAba = {};   // { aba: {inicio:'14/08', fim:'16/08'} }
+const FRASE = {
+  faixa: 'Ofertas válidas para as lojas de Bom Princípio e São Sebastião do Caí de {inicio} a {fim}',
+  unica: 'Ofertas válidas para as lojas de Bom Princípio e São Sebastião do Caí dia {inicio}'
+};
+const dd = n => String(parseInt(n,10)).padStart(2,'0');
+
+/* lê "(17/08)", "( 12/08 e 13/08)", "14, 15 e 16/08", "17/08 A 30/08", "17 /08" */
+function lerDatas(txt){
+  const t = String(txt||'');
+  const todas = [...t.matchAll(/(\d{1,2})\s*\/\s*(\d{1,2})/g)];
+  if(!todas.length) return null;
+
+  // duas ou mais datas completas: a primeira e a última mandam
+  if(todas.length >= 2){
+    const f = todas[0], u = todas[todas.length-1];
+    return { inicio: dd(f[1])+'/'+dd(f[2]), fim: dd(u[1])+'/'+dd(u[2]) };
+  }
+
+  // uma só data completa: pode haver dias soltos antes dela herdando o mês,
+  // como em "14, 15 e 16/08" — mas nunca colados a uma barra
+  const unica = todas[0];
+  const antes = t.slice(0, unica.index);
+  const lista = antes.match(/(?:^|[^\d\/])(\d{1,2}(?:\s*(?:,|e)\s*\d{1,2})*)\s*(?:,|e)\s*$/i);
+  if(lista){
+    const soltos = lista[1].split(/\s*(?:,|e)\s*/).filter(Boolean).map(n=>parseInt(n,10));
+    const validos = soltos.filter(n=> n>=1 && n<=31);
+    if(validos.length){
+      const mes = dd(unica[2]);
+      return { inicio: dd(validos[0])+'/'+mes, fim: dd(unica[1])+'/'+mes };
+    }
+  }
+  const d = dd(unica[1])+'/'+dd(unica[2]);
+  return { inicio: d, fim: d };
+}
+function detectarValidade(grade, nome){
+  for(let r=0; r<Math.min(6, grade.length); r++){
+    for(const cel of (grade[r]||[])){
+      const t = String(cel??'');
+      if(t.length > 6 && /\d{1,2}\s*\/\s*\d{1,2}/.test(t)){
+        const d = lerDatas(t);
+        if(d) return {...d, origem: t.trim().slice(0,70)};
+      }
+    }
+  }
+  return null;
+}
+function frasePara(aba){
+  const v = validadeAba[aba];
+  if(!v || !v.inicio) return '';
+  const modelo = (v.fim && v.fim !== v.inicio) ? FRASE.faixa : FRASE.unica;
+  return modelo.replace('{inicio}', v.inicio).replace('{fim}', v.fim || v.inicio);
+}
+function setValidade(aba, campo, valor){
+  if(!validadeAba[aba]) validadeAba[aba] = {};
+  validadeAba[aba][campo] = valor.trim();
+  lerDados();
+}
+function montarTabelaValidade(){
+  const t = document.getElementById('tab-validade');
+  if(!t) return;
+  const usam = abasPlanilha.filter(n => ABA_FINDI.test(n) || linhas.some(l=>l.aba===n && l.boa));
+  const cx = document.getElementById('bloco-validade');
+  if(cx) cx.style.display = usam.length ? 'block' : 'none';
+  if(!usam.length){ t.innerHTML=''; return; }
+  t.innerHTML = '<thead><tr><th>Aba</th><th>Início</th><th>Fim</th><th>Como vai sair na cartela</th></tr></thead><tbody>'
+    + usam.map(nome=>{
+      const v = validadeAba[nome] || {};
+      const frase = frasePara(nome);
+      return `<tr><td><b>${esc(nome)}</b></td>
+        <td><input type="text" class="mini-data" value="${esc(v.inicio||'')}" placeholder="14/08"
+             onchange="setValidade('${esc(nome).replace(/'/g,"\\'")}','inicio',this.value)"></td>
+        <td><input type="text" class="mini-data" value="${esc(v.fim||'')}" placeholder="16/08"
+             onchange="setValidade('${esc(nome).replace(/'/g,"\\'")}','fim',this.value)"></td>
+        <td class="frase-prev">${frase ? esc(frase) : '<span class="diag-ruim">sem data detectada</span>'}</td></tr>`;
+    }).join('') + '</tbody>';
+}
+
 /* ===== mapeamento de colunas, por aba, com detecção automática ===== */
-const MARCA_BOA = /boa[s]?\s+do\s+dia/i;
+const MARCA_BOA = /boa[s]?\s+do[s]?\s+(dia|findi|fim\s+de\s+semana)/i;
+const ABA_FINDI = /findi|fim\s+de\s+semana/i;
+const ABA_BOA = '__BOA__';   // template de Boa do Dia serve pra qualquer aba
+/* só essas cartelas levam o texto de validade */
+const levaValidade = (aba, naBoa) => naBoa || ABA_FINDI.test(aba);
 const TIPOS = {
   simples:   'Simples',
   depor:     'De / Por',
@@ -995,8 +1109,12 @@ function detectarColunas(grade, inicio){
 function detectarTodas(forcar){
   const inicio = Math.max(1, parseInt(document.getElementById('f-inicio')?.value)||2);
   abasPlanilha.forEach(nome=>{
-    if(!forcar && colsAba[nome]) return;
     const grade = XLSX.utils.sheet_to_json(pastaXls.Sheets[nome], {header:1, defval:''});
+    if(forcar || !validadeAba[nome]){
+      const v = detectarValidade(grade, nome);
+      if(v) validadeAba[nome] = v;
+    }
+    if(!forcar && colsAba[nome]) return;
     colsAba[nome] = detectarColunas(grade, inicio);
   });
 }
@@ -1061,12 +1179,14 @@ function lerDados(){
                     : (c.unidade==='' ? '' : String(l[c.unidade]??'').trim());
       const tipo = naBoa ? (g.valor ? 'boa_depor' : 'boa')
                          : (g.valor ? 'depor' : 'simples');
-      const tpl = templates.find(t=>t.aba===nome && t.tipo===tipo);
+      let tpl = templates.find(t=>t.aba===nome && t.tipo===tipo);
+      if(!tpl && naBoa) tpl = templates.find(t=>t.aba===ABA_BOA && t.tipo===tipo);
       linhas.push({aba:nome, linha:r+1, produto, variacao, unidade,
+                   validade: levaValidade(nome, naBoa) ? frasePara(nome) : '',
                    de:g.valor, por:h.valor, tipo, boa:naBoa, tplId: tpl?tpl.id:null});
     }
   });
-  montarTabelaColunas();
+  montarTabelaColunas(); montarTabelaValidade(); pintarFiltro();
   pintarPlanilha(); atualizarRodape(); marcarSujo();
 }
 /* separa o valor da unidade que vem junto na célula.
@@ -1228,11 +1348,14 @@ function selecionadas(){
 }
 function pintarFiltro(){
   const cx = document.getElementById('cx-filtro');
-  const el = document.getElementById('lista-filtro');
+  const alvos = [document.getElementById('lista-filtro'), document.getElementById('lista-filtro-3')].filter(Boolean);
+  const notas = [document.getElementById('nota-filtro'), document.getElementById('nota-filtro-3')].filter(Boolean);
+  const cx3 = document.getElementById('cx-escolha');
   const abas = [...new Set(linhas.filter(l=>l.tplId).map(l=>l.aba))];
   const orfas = [...new Set(linhas.filter(l=>!l.tplId).map(l=>l.aba))];
-  if(abas.length < 2 && !orfas.length){ cx.style.display='none'; filtroAbas=null; return; }
-  cx.style.display='block';
+  if(cx3) cx3.style.display = (abas.length || orfas.length) ? 'block' : 'none';
+  if(abas.length < 2 && !orfas.length){ if(cx) cx.style.display='none'; filtroAbas=null; return; }
+  if(cx) cx.style.display='block';
   if(!filtroAbas) filtroAbas = new Set(abas);
   const prontas = abas.map(a=>{
     const n = linhas.filter(l=>l.tplId && l.aba===a).length;
@@ -1245,21 +1368,20 @@ function pintarFiltro(){
     return `<span class="chip chip-off" title="falta template ${tipos.join(' e ')} pra essa aba">
       ${esc(a)} <span class="qt">${n} sem template</span></span>`;
   }).join('');
-  el.innerHTML = prontas + bloqueadas;
-  const nota = document.getElementById('nota-filtro');
-  if(nota) nota.innerHTML = orfas.length
+  alvos.forEach(el=> el.innerHTML = prontas + bloqueadas);
+  notas.forEach(nota=> nota.innerHTML = orfas.length
     ? `As abas em cinza têm produtos mas nenhum template correspondente. Na etapa 1, confere se existe um template marcado com essa aba e com o tipo certo — simples e de/por são templates separados.`
-    : '';
+    : '');
 }
 function alternarAba(a){
   if(!filtroAbas) filtroAbas = new Set();
   filtroAbas.has(a) ? filtroAbas.delete(a) : filtroAbas.add(a);
-  iPrev = 0; montarPreview();
+  iPrev = 0; montarPreview(); pintarFiltro(); atualizarRodape();
 }
 function filtroTodas(marcar){
   const abas = [...new Set(linhas.filter(l=>l.tplId).map(l=>l.aba))];
   filtroAbas = marcar ? new Set(abas) : new Set();
-  iPrev = 0; montarPreview();
+  iPrev = 0; montarPreview(); pintarFiltro(); atualizarRodape();
 }
 function passar(d){
   const uteis = selecionadas();
@@ -1348,7 +1470,7 @@ function estadoAtual(){
     versao:3, templates,
     inicio: document.getElementById('f-inicio')?.value || '2',
     moeda: document.getElementById('f-moeda')?.value || 'virgula',
-    colsAba,
+    colsAba, validadeAba,
     larg: document.getElementById('f-larg')?.value || '96',
     esp: document.getElementById('f-esp')?.value || '3',
     quando: Date.now()
@@ -1393,6 +1515,7 @@ function aplicarEstado(cfg){
   põe('f-inicio', cfg.inicio); põe('f-moeda', cfg.moeda);
   põe('f-larg', cfg.larg); põe('f-esp', cfg.esp);
   if(cfg.colsAba) colsAba = cfg.colsAba;
+  if(cfg.validadeAba) validadeAba = cfg.validadeAba;
   pintarTemplates(); pintarSeletor(); pintarTela(); lerDados(); atualizarRodape();
   comprimirExistentes().then(n=>{
     if(n){ pintarTemplates(); pintarTela(); marcarSujo(); }

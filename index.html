@@ -6,7 +6,7 @@
 <title>Gerador de Cartelas</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&family=Barlow+Condensed:wght@400;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&family=Anton&family=Archivo+Black&family=Bebas+Neue&family=Oswald:wght@400;600;700&family=Montserrat:wght@600;700;800&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&family=Barlow+Condensed:wght@400;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&family=Anton&family=Archivo+Black&family=Bebas+Neue&family=Oswald:wght@400;600;700&family=Montserrat:wght@600;700;800&family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -299,7 +299,7 @@ tr:last-child td{border-bottom:0}
   <div class="marca">
     <h1>Gerador de Cartelas</h1>
     <span>planilha + template &rarr; folha A4 pronta pra imprimir</span>
-    <span class="versao">v13</span>
+    <span class="versao">v14</span>
   </div>
   <div class="abas" role="tablist">
     <button class="aba" role="tab" id="aba-1" aria-selected="true" onclick="verPainel(1)"><span class="n">1</span> Templates</button>
@@ -453,6 +453,7 @@ tr:last-child td{border-bottom:0}
         </div>
         <div class="divisor"></div>
         <button class="bt bt-vazio" style="width:100%" onclick="copiarPra()">Copiar ajustes pros outros templates</button>
+        <button class="bt bt-vazio" style="width:100%;margin-top:7px" onclick="aplicarPadraoCasa()">Aplicar fonte e cores padrão em todos</button>
       </div>
     </div>
   </div>
@@ -592,12 +593,24 @@ let linhas = [];
 let tplAtual = null;
 let campoAtual = null;
 
+const BRANCO = '#FFFFFF', LARANJA = '#E37835';
 const BASE = {
-  produto:  {x:6,  y:14, w:88, h:16, size:8,   quebra:'1', transform:'uppercase', prefixo:'', caber:'2'},
-  variacao: {x:8,  y:31, w:84, h:11, size:5,   quebra:'1', transform:'uppercase', prefixo:'', caber:'1'},
-  unidade:  {x:66, y:62, w:28, h:10, size:3.5, quebra:'1', transform:'uppercase', prefixo:'', caber:'2', align:'flex-end'},
-  preco_de: {x:6,  y:48, w:32, h:11, size:9,   quebra:'0', transform:'none', prefixo:'', caber:'1'},
-  preco_por:{x:40, y:52, w:52, h:14, size:13,  quebra:'0', transform:'none', prefixo:'', caber:'1'}
+  produto:  {x:6,  y:14, w:88, h:16, size:8,   quebra:'1', transform:'uppercase', prefixo:'', caber:'2',
+             family:'Quicksand', color:BRANCO},
+  variacao: {x:8,  y:31, w:84, h:11, size:5,   quebra:'1', transform:'uppercase', prefixo:'', caber:'1',
+             family:'Quicksand', color:BRANCO},
+  unidade:  {x:66, y:62, w:28, h:10, size:3.5, quebra:'1', transform:'uppercase', prefixo:'', caber:'2',
+             align:'flex-end', family:'Poppins', color:BRANCO},
+  preco_de: {x:6,  y:48, w:32, h:11, size:9,   quebra:'0', transform:'none', prefixo:'', caber:'1',
+             family:'Poppins', color:LARANJA},
+  preco_por:{x:40, y:52, w:52, h:14, size:13,  quebra:'0', transform:'none', prefixo:'', caber:'1',
+             family:'Poppins', color:BRANCO}
+};
+/* padrão da casa, aplicável a templates já configurados */
+const PADRAO_CASA = {
+  unidade:  {family:'Poppins', color:BRANCO},
+  preco_de: {family:'Poppins', color:LARANJA},
+  preco_por:{family:'Poppins', color:BRANCO}
 };
 const padrao = c => ({
   ativo:false,
@@ -851,6 +864,22 @@ function mudar(k,v){
   const t = achaTpl(); if(!t||!campoAtual) return;
   t.campos[campoAtual][k] = (k==='size') ? parseFloat(v)||1 : v;
   pintarTela(); marcarSujo();
+}
+/* aplica só fonte e cor, preservando posição e tamanho já ajustados */
+function aplicarPadraoCasa(){
+  if(!templates.length) return;
+  let n = 0;
+  templates.forEach(t=>{
+    Object.entries(PADRAO_CASA).forEach(([campo, regra])=>{
+      if(!t.campos[campo]) t.campos[campo] = padrao(campo);
+      Object.assign(t.campos[campo], regra);
+      n++;
+    });
+  });
+  pintarTela(); pintarControles(); marcarSujo();
+  alert(`Fonte Poppins e cores aplicadas em ${templates.length} template(s).\n\n`
+      + `Unidade e preço "por" em branco, preço "de" em laranja.\n`
+      + `Posição e tamanho de cada campo foram preservados.`);
 }
 function copiarPra(){
   const t = achaTpl(); if(!t||!campoAtual) return;

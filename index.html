@@ -665,7 +665,7 @@ function pintarTela(){
   const t = achaTpl(), tela = document.getElementById('tela');
   if(!t){ tela.innerHTML='<p class="sub">Carrega um template na aba 1 primeiro.</p>'; return; }
   tela.innerHTML = `<img src="${t.src}" alt="">` + CAMPOS.map(c=>{
-    const f = t.campos[c];
+    const f = t.campos[c] || (t.campos[c] = padrao(c));
     if(!f.ativo) return '';
     const sel = campoAtual===c ? '1':'0';
     return `<div class="caixa" data-c="${c}" data-sel="${sel}"
@@ -683,7 +683,7 @@ function pintarTela(){
   CAMPOS.forEach(c=>{
     const b = document.querySelector(`.campo-bt[data-campo="${c}"]`);
     const e = document.getElementById('est-'+c);
-    const on = t.campos[c].ativo;
+    const on = (t.campos[c]||{}).ativo;
     b.setAttribute('data-on', campoAtual===c ? '1':'0');
     e.textContent = on ? 'no lugar' : 'desligado';
     e.className = on ? 'est viva' : 'est';
@@ -729,7 +729,7 @@ function ajustarFontes(){
   const img = document.querySelector('#tela img'); if(!img) return;
   const alt = img.clientHeight || 1;
   document.querySelectorAll('#tela .caixa').forEach(cx=>{
-    const f = t.campos[cx.dataset.c];
+    const f = t.campos[cx.dataset.c] || padrao(cx.dataset.c);
     cx.querySelector('.txt').style.fontSize = (f.size/100*alt) + 'px';
     cx.setAttribute('data-caber', f.caber ?? '1');
   });
@@ -987,12 +987,13 @@ function htmlCartela(l, larguraMm){
   const t = templates.find(x=>x.id===l.tplId);
   if(!t) return '';
   const alturaMm = larguraMm * (t.h/t.w);
-  const temVar = !!l.variacao && t.campos.variacao.ativo;
+  const cp = c => t.campos[c] || padrao(c);
+  const temVar = !!l.variacao && cp('variacao').ativo;
   // sem variação, o nome herda a faixa que sobrou
   const area = c=>{
-    const f = t.campos[c];
-    if(c==='produto' && !temVar && t.campos.variacao.ativo){
-      const v = t.campos.variacao;
+    const f = cp(c);
+    if(c==='produto' && !temVar && cp('variacao').ativo){
+      const v = cp('variacao');
       const topo = Math.min(f.y, v.y);
       const base = Math.max(f.y+f.h, v.y+v.h);
       return {x:f.x, y:topo, w:f.w, h:base-topo};
@@ -1000,7 +1001,7 @@ function htmlCartela(l, larguraMm){
     return {x:f.x, y:f.y, w:f.w, h:f.h};
   };
   const cmp = c=>{
-    const f = t.campos[c];
+    const f = cp(c);
     if(!f.ativo) return '';
     const v = VALOR(c, l);
     if(!v) return '';
@@ -1074,12 +1075,19 @@ function montarPreview(){
 
   if(!uteis.length){
     nums.innerHTML=''; pintarPreview();
-    alertas.innerHTML = `<div class="aviso"><b>Falta ligar as pontas</b>Carrega os templates na aba 1, posiciona os campos na 2 e manda a planilha na 3.</div>`;
+    const motivos = [];
+    if(!templates.length) motivos.push('nenhum template carregado na etapa 1');
+    if(templates.length && !templates.some(t=>t.aba)) motivos.push('nenhum template tem a aba definida na etapa 1');
+    if(!pastaXls) motivos.push('a planilha ainda não foi carregada na etapa 3');
+    if(pastaXls && !linhas.length) motivos.push('a planilha carregou mas nenhum produto foi lido — confere as colunas e a linha inicial na etapa 3');
+    if(pastaXls && linhas.length) motivos.push('os produtos foram lidos mas nenhum template combina com a aba e o tipo deles — confere na etapa 3 quais estão marcados como sem template');
+    alertas.innerHTML = `<div class="aviso"><b>Nenhuma cartela pronta</b>${
+      motivos.map(m=>'&bull; '+esc(m)).join('<br>')}</div>`;
     info.textContent=''; document.getElementById('bt-imprimir').disabled = true;
     return;
   }
   const r = montarFolhas();
-  const semPos = templates.filter(t=> !CAMPOS.some(c=>t.campos[c].ativo));
+  const semPos = templates.filter(t=> !CAMPOS.some(c=>(t.campos[c]||{}).ativo));
   nums.innerHTML = `
     <div class="num"><b>${uteis.length}</b><span>cartelas</span></div>
     <div class="num"><b>${r.folhas}</b><span>folhas A4</span></div>
@@ -1138,8 +1146,24 @@ function estadoAtual(){
     esp: document.getElementById('f-esp')?.value || '3'
   };
 }
+/* completa templates salvos por versões anteriores */
+function migrarTemplates(lista){
+  return (lista||[]).map(t=>{
+    const campos = t.campos || {};
+    CAMPOS.forEach(c=>{
+      const base = padrao(c);
+      campos[c] = campos[c] ? {...base, ...campos[c]} : base;
+      // propriedades novas que podem vir vazias
+      if(campos[c].caber === undefined) campos[c].caber = base.caber;
+      if(campos[c].quebra === undefined) campos[c].quebra = base.quebra;
+      if(campos[c].prefixo === undefined) campos[c].prefixo = base.prefixo;
+    });
+    Object.keys(campos).forEach(k=>{ if(!CAMPOS.includes(k)) delete campos[k]; });
+    return {...t, campos, aba: t.aba||'', tipo: t.tipo||'simples'};
+  });
+}
 function aplicarEstado(cfg){
-  templates = cfg.templates || [];
+  templates = migrarTemplates(cfg.templates);
   tplAtual = templates.length ? templates[0].id : null;
   const põe = (id,v)=>{ const e=document.getElementById(id); if(e && v!=null) e.value=v; };
   põe('f-inicio', cfg.inicio); põe('f-moeda', cfg.moeda);

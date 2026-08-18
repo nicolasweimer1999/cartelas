@@ -183,6 +183,10 @@ button{font-family:'Inter',sans-serif}
 .marca-salvo.ok{color:var(--ok)}
 .marca-salvo.ruim{color:var(--laranja)}
 .cabeca-cols{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:12px}
+.bloco-val{background:#F8FAFC;border:1px solid var(--regua);border-radius:8px;padding:11px 13px;margin-bottom:10px}
+.rot-val{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--azul);margin-bottom:8px}
+.linha-val{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+.prev-val{flex:1;min-width:230px}
 .mini-data{width:74px;font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 6px}
 .frase-prev{font-size:11.5px;color:var(--apagado);line-height:1.4}
 .sel-col{font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 6px;min-width:64px}
@@ -305,7 +309,7 @@ tr:last-child td{border-bottom:0}
   <div class="marca">
     <h1>Gerador de Cartelas</h1>
     <span>planilha + template &rarr; folha A4 pronta pra imprimir</span>
-    <span class="versao">v8</span>
+    <span class="versao">v9</span>
   </div>
   <div class="abas" role="tablist">
     <button class="aba" role="tab" id="aba-1" aria-selected="true" onclick="verPainel(1)"><span class="n">1</span> Templates</button>
@@ -483,38 +487,46 @@ tr:last-child td{border-bottom:0}
 
   <div class="cartao" style="margin-top:16px;border-color:var(--laranja)">
     <label class="et">Validade das ofertas</label>
-    <p class="sub" style="margin:0 0 12px;font-size:12.5px">
-      Informa as datas e o texto se monta sozinho. Vale pras cartelas do Findi, Boa do Dia e Boa do Findi.
+    <p class="sub" style="margin:0 0 14px;font-size:12.5px">
+      Informa as datas da semana. O texto se monta sozinho e entra só nas cartelas que levam validade.
     </p>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
-      <div>
-        <label class="et" for="vg-inicio">Início</label>
-        <input type="text" id="vg-inicio" class="mini-data" placeholder="14/08"
-               oninput="setValidadeGeral('inicio',this.value)">
-      </div>
-      <div>
-        <label class="et" for="vg-fim">Fim</label>
-        <input type="text" id="vg-fim" class="mini-data" placeholder="16/08"
-               oninput="setValidadeGeral('fim',this.value)">
-      </div>
-      <div style="flex:1;min-width:240px">
-        <label class="et">Como vai sair na cartela</label>
-        <div id="previa-frase" class="frase-prev" style="padding:7px 9px;background:#F6F8FA;border-radius:6px;min-height:32px"></div>
+
+    <div class="bloco-val">
+      <div class="rot-val">Findi e Boa do Findi</div>
+      <div class="linha-val">
+        <div>
+          <label class="et" for="v-fi">De</label>
+          <input type="text" id="v-fi" class="mini-data" placeholder="14/08" oninput="setValidade('findiInicio',this.value)">
+        </div>
+        <div>
+          <label class="et" for="v-ff">Até</label>
+          <input type="text" id="v-ff" class="mini-data" placeholder="16/08" oninput="setValidade('findiFim',this.value)">
+        </div>
+        <div class="prev-val"><div id="previa-findi" class="frase-prev"></div></div>
       </div>
     </div>
+
+    <div class="bloco-val">
+      <div class="rot-val">Boa do Dia</div>
+      <div class="linha-val">
+        <div>
+          <label class="et" for="v-db">Dia</label>
+          <input type="text" id="v-db" class="mini-data" placeholder="13/08" oninput="setValidade('diaBoa',this.value)">
+        </div>
+        <div class="prev-val"><div id="previa-dia" class="frase-prev"></div></div>
+      </div>
+    </div>
+
     <details style="margin-top:12px">
       <summary class="et" style="cursor:pointer;margin:0">Editar o texto fixo</summary>
       <div class="ctrl">
-        <label class="et" for="fr-faixa">Quando tem período</label>
+        <label class="et" for="fr-faixa">Findi — usa {inicio} e {fim}</label>
         <input type="text" id="fr-faixa" onchange="setFrase('faixa',this.value)">
       </div>
       <div class="ctrl">
-        <label class="et" for="fr-unica">Quando é um dia só</label>
+        <label class="et" for="fr-unica">Boa do Dia — usa {dia}</label>
         <input type="text" id="fr-unica" onchange="setFrase('unica',this.value)">
       </div>
-      <p class="sub" style="margin:9px 0 0;font-size:12px">
-        Usa <b>{inicio}</b> e <b>{fim}</b> onde as datas devem entrar.
-      </p>
     </details>
   </div>
 
@@ -554,16 +566,7 @@ tr:last-child td{border-bottom:0}
     </p>
     <div class="rolagem"><table id="tab-colunas"></table></div>
 
-    <div id="bloco-validade" style="display:none">
-      <div class="divisor"></div>
-      <details>
-        <summary class="et" style="cursor:pointer;margin:0">Datas diferentes por aba (opcional)</summary>
-        <p class="sub" style="margin:9px 0 12px;font-size:12.5px">
-          Preenchido aqui, tem prioridade sobre as datas gerais. Deixa em branco pra usar as de cima.
-        </p>
-        <div class="rolagem"><table id="tab-validade"></table></div>
-      </details>
-    </div>
+
   </div>
 
   <div id="saida-plan"></div>
@@ -1052,103 +1055,47 @@ function lerPlanilha(arq){
   };
   fr.readAsArrayBuffer(arq);
 }
-/* ===== validade das ofertas ===== */
-let validadeAba = {};              // datas por aba, quando quiser diferenciar
-let validadeGeral = {inicio:'', fim:''};   // datas digitadas, valem pra todas
+/* ===== validade das ofertas — datas informadas por ti ===== */
+let validade = {findiInicio:'', findiFim:'', diaBoa:''};
 const FRASE = {
   faixa: 'Ofertas válidas para as lojas de Bom Princípio e São Sebastião do Caí de {inicio} a {fim}',
-  unica: 'Ofertas válidas para as lojas de Bom Princípio e São Sebastião do Caí dia {inicio}'
+  unica: 'Ofertas válidas para as lojas de Bom Princípio e São Sebastião do Caí dia {dia}'
 };
-const dd = n => String(parseInt(n,10)).padStart(2,'0');
 
-/* lê "(17/08)", "( 12/08 e 13/08)", "14, 15 e 16/08", "17/08 A 30/08", "17 /08" */
-function lerDatas(txt){
-  const t = String(txt||'');
-  const todas = [...t.matchAll(/(\d{1,2})\s*\/\s*(\d{1,2})/g)];
-  if(!todas.length) return null;
-
-  // duas ou mais datas completas: a primeira e a última mandam
-  if(todas.length >= 2){
-    const f = todas[0], u = todas[todas.length-1];
-    return { inicio: dd(f[1])+'/'+dd(f[2]), fim: dd(u[1])+'/'+dd(u[2]) };
+/* Findi e Boa do Findi levam período; Boa do Dia leva um dia só */
+function fraseValidade(aba, secao){
+  if(secao === 'dia'){
+    if(!validade.diaBoa) return '';
+    return FRASE.unica.replace('{dia}', validade.diaBoa);
   }
-
-  // uma só data completa: pode haver dias soltos antes dela herdando o mês,
-  // como em "14, 15 e 16/08" — mas nunca colados a uma barra
-  const unica = todas[0];
-  const antes = t.slice(0, unica.index);
-  const lista = antes.match(/(?:^|[^\d\/])(\d{1,2}(?:\s*(?:,|e)\s*\d{1,2})*)\s*(?:,|e)\s*$/i);
-  if(lista){
-    const soltos = lista[1].split(/\s*(?:,|e)\s*/).filter(Boolean).map(n=>parseInt(n,10));
-    const validos = soltos.filter(n=> n>=1 && n<=31);
-    if(validos.length){
-      const mes = dd(unica[2]);
-      return { inicio: dd(validos[0])+'/'+mes, fim: dd(unica[1])+'/'+mes };
-    }
+  if(secao === 'findi' || ABA_FINDI.test(aba)){
+    if(!validade.findiInicio) return '';
+    const fim = validade.findiFim || validade.findiInicio;
+    return FRASE.faixa.replace('{inicio}', validade.findiInicio).replace('{fim}', fim);
   }
-  const d = dd(unica[1])+'/'+dd(unica[2]);
-  return { inicio: d, fim: d };
+  return '';
 }
-function detectarValidade(grade, nome){
-  for(let r=0; r<Math.min(6, grade.length); r++){
-    for(const cel of (grade[r]||[])){
-      const t = String(cel??'');
-      if(t.length > 6 && /\d{1,2}\s*\/\s*\d{1,2}/.test(t)){
-        const d = lerDatas(t);
-        if(d) return {...d, origem: t.trim().slice(0,70)};
-      }
-    }
-  }
-  return null;
-}
-function frasePara(aba){
-  const esp = validadeAba[aba];
-  const v = (esp && esp.inicio) ? esp : validadeGeral;
-  if(!v || !v.inicio) return '';
-  const modelo = (v.fim && v.fim !== v.inicio) ? FRASE.faixa : FRASE.unica;
-  return modelo.replace('{inicio}', v.inicio).replace('{fim}', v.fim || v.inicio);
-}
-function setValidade(aba, campo, valor){
-  if(!validadeAba[aba]) validadeAba[aba] = {};
-  validadeAba[aba][campo] = valor.trim();
-  lerDados();
-}
-function setValidadeGeral(campo, valor){
-  validadeGeral[campo] = valor.trim();
-  if(campo==='inicio' && !validadeGeral.fim) validadeGeral.fim = valor.trim();
-  pintarFraseGeral();
+function setValidade(campo, valor){
+  validade[campo] = valor.trim();
+  pintarPreviaValidade();
   if(pastaXls) lerDados(); else marcarSujo();
 }
-function setFrase(qual, txt){ FRASE[qual] = txt; pintarFraseGeral(); if(pastaXls) lerDados(); }
-function pintarFraseGeral(){
-  const el = document.getElementById('previa-frase');
-  if(!el) return;
-  const v = validadeGeral;
-  if(!v.inicio){ el.innerHTML = '<span class="diag-ruim">informa a data de início pra montar o texto</span>'; return; }
-  const modelo = (v.fim && v.fim !== v.inicio) ? FRASE.faixa : FRASE.unica;
-  el.textContent = modelo.replace('{inicio}', v.inicio).replace('{fim}', v.fim || v.inicio);
-  const i = document.getElementById('vg-inicio'), f = document.getElementById('vg-fim');
-  if(i && i.value !== v.inicio) i.value = v.inicio;
-  if(f && f.value !== v.fim) f.value = v.fim;
-}
-function montarTabelaValidade(){
-  const t = document.getElementById('tab-validade');
-  if(!t) return;
-  const usam = abasPlanilha.filter(n => ABA_FINDI.test(n) || linhas.some(l=>l.aba===n && l.boa));
-  const cx = document.getElementById('bloco-validade');
-  if(cx) cx.style.display = usam.length ? 'block' : 'none';
-  if(!usam.length){ t.innerHTML=''; return; }
-  t.innerHTML = '<thead><tr><th>Aba</th><th>Início</th><th>Fim</th><th>Como vai sair na cartela</th></tr></thead><tbody>'
-    + usam.map(nome=>{
-      const v = validadeAba[nome] || {};
-      const frase = frasePara(nome);
-      return `<tr><td><b>${esc(nome)}</b></td>
-        <td><input type="text" class="mini-data" value="${esc(v.inicio||'')}" placeholder="14/08"
-             onchange="setValidade('${esc(nome).replace(/'/g,"\\'")}','inicio',this.value)"></td>
-        <td><input type="text" class="mini-data" value="${esc(v.fim||'')}" placeholder="16/08"
-             onchange="setValidade('${esc(nome).replace(/'/g,"\\'")}','fim',this.value)"></td>
-        <td class="frase-prev">${frase ? esc(frase) : '<span class="diag-ruim">sem data detectada</span>'}</td></tr>`;
-    }).join('') + '</tbody>';
+function setFrase(qual, txt){ FRASE[qual] = txt; pintarPreviaValidade(); if(pastaXls) lerDados(); }
+function pintarPreviaValidade(){
+  const pf = document.getElementById('previa-findi');
+  const pd = document.getElementById('previa-dia');
+  if(pf){
+    const t = fraseValidade('FINDI', 'findi');
+    pf.innerHTML = t ? esc(t) : '<span class="diag-ruim">informa a data de início</span>';
+  }
+  if(pd){
+    const t = fraseValidade('', 'dia');
+    pd.innerHTML = t ? esc(t) : '<span class="diag-ruim">informa o dia</span>';
+  }
+  [['v-fi','findiInicio'],['v-ff','findiFim'],['v-db','diaBoa']].forEach(([id,k])=>{
+    const e = document.getElementById(id);
+    if(e && e.value !== validade[k]) e.value = validade[k];
+  });
 }
 
 /* ===== mapeamento de colunas, por aba, com detecção automática ===== */
@@ -1157,8 +1104,6 @@ const MARCA_DIA_SEC   = /boa[s]?\s+do[s]?\s+dia/i;
 const MARCA_BOA = /boa[s]?\s+do[s]?\s+(dia|findi|fim\s+de\s+semana)/i;
 const ABA_FINDI = /findi|fim\s+de\s+semana/i;
 const ABA_BOA = '__BOA__';   // template de Boa do Dia serve pra qualquer aba
-/* só essas cartelas levam o texto de validade */
-const levaValidade = (aba, naBoa) => naBoa || ABA_FINDI.test(aba);
 const TIPOS = {
   simples:         'Simples',
   depor:           'De / Por',
@@ -1221,15 +1166,6 @@ function detectarTodas(forcar){
   const inicio = Math.max(1, parseInt(document.getElementById('f-inicio')?.value)||2);
   abasPlanilha.forEach(nome=>{
     const grade = XLSX.utils.sheet_to_json(pastaXls.Sheets[nome], {header:1, defval:''});
-    if(forcar || !validadeAba[nome]){
-      const v = detectarValidade(grade, nome);
-      if(v){
-        validadeAba[nome] = v;
-        if(!validadeGeral.inicio && (ABA_FINDI.test(nome) || /findi/i.test(nome))){
-          validadeGeral = {inicio:v.inicio, fim:v.fim};
-        }
-      }
-    }
     if(!forcar && colsAba[nome]) return;
     colsAba[nome] = detectarColunas(grade, inicio);
   });
@@ -1304,11 +1240,11 @@ function lerDados(){
       let tpl = templates.find(t=>t.aba===nome && t.tipo===tipo);
       if(!tpl && secao) tpl = templates.find(t=>t.aba===ABA_BOA && t.tipo===tipo);
       linhas.push({aba:nome, linha:r+1, produto, variacao, unidade,
-                   validade: levaValidade(nome, !!secao) ? frasePara(nome) : '',
+                   validade: fraseValidade(nome, secao),
                    de:g.valor, por:h.valor, tipo, boa:!!secao, secao, tplId: tpl?tpl.id:null});
     }
   });
-  montarTabelaColunas(); montarTabelaValidade(); pintarFiltro();
+  montarTabelaColunas(); pintarFiltro();
   pintarPlanilha(); atualizarRodape(); marcarSujo();
 }
 /* separa o valor da unidade que vem junto na célula.
@@ -1593,7 +1529,7 @@ function estadoAtual(){
     versao:3, templates,
     inicio: document.getElementById('f-inicio')?.value || '2',
     moeda: document.getElementById('f-moeda')?.value || 'virgula',
-    colsAba, validadeAba, validadeGeral, frases:FRASE,
+    colsAba, validade, frases:FRASE,
     larg: document.getElementById('f-larg')?.value || '96',
     esp: document.getElementById('f-esp')?.value || '3',
     quando: Date.now()
@@ -1638,10 +1574,9 @@ function aplicarEstado(cfg){
   põe('f-inicio', cfg.inicio); põe('f-moeda', cfg.moeda);
   põe('f-larg', cfg.larg); põe('f-esp', cfg.esp);
   if(cfg.colsAba) colsAba = cfg.colsAba;
-  if(cfg.validadeAba) validadeAba = cfg.validadeAba;
-  if(cfg.validadeGeral) validadeGeral = cfg.validadeGeral;
+  if(cfg.validade) validade = {...validade, ...cfg.validade};
   if(cfg.frases){ FRASE.faixa = cfg.frases.faixa || FRASE.faixa; FRASE.unica = cfg.frases.unica || FRASE.unica; }
-  pintarFraseGeral();
+  pintarPreviaValidade();
   pintarTemplates(); pintarSeletor(); pintarTela(); lerDados(); atualizarRodape();
   comprimirExistentes().then(n=>{
     if(n){ pintarTemplates(); pintarTela(); marcarSujo(); }
@@ -1990,7 +1925,7 @@ pintarSeletor(); pintarTela();
 const _ff = document.getElementById('fr-faixa'), _fu = document.getElementById('fr-unica');
 if(_ff) _ff.value = FRASE.faixa;
 if(_fu) _fu.value = FRASE.unica;
-pintarFraseGeral();
+pintarPreviaValidade();
 iniciarNuvem();
 </script>
 </body>

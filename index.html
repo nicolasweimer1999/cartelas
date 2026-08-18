@@ -183,6 +183,16 @@ button{font-family:'Inter',sans-serif}
 .marca-salvo.ok{color:var(--ok)}
 .marca-salvo.ruim{color:var(--laranja)}
 .cabeca-cols{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:12px}
+.trava{
+  background:#FDECE2;border:1px solid #F0BFA0;border-left:4px solid #D64516;
+  border-radius:8px;padding:15px 17px;margin-bottom:16px;
+}
+.trava-tit{
+  font-family:'Barlow Condensed',sans-serif;font-size:19px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.03em;color:#B04A12;margin-bottom:5px;
+}
+.trava p{font-size:13.5px;line-height:1.5;margin-bottom:8px}
+.trava-datas{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--tinta)}
 .bloco-val{background:#F8FAFC;border:1px solid var(--regua);border-radius:8px;padding:11px 13px;margin-bottom:10px}
 .rot-val{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--azul);margin-bottom:8px}
 .linha-val{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
@@ -309,7 +319,7 @@ tr:last-child td{border-bottom:0}
   <div class="marca">
     <h1>Gerador de Cartelas</h1>
     <span>planilha + template &rarr; folha A4 pronta pra imprimir</span>
-    <span class="versao">v9</span>
+    <span class="versao">v10</span>
   </div>
   <div class="abas" role="tablist">
     <button class="aba" role="tab" id="aba-1" aria-selected="true" onclick="verPainel(1)"><span class="n">1</span> Templates</button>
@@ -591,6 +601,8 @@ tr:last-child td{border-bottom:0}
     <p class="sub" style="margin:12px 0 0;font-size:12.5px" id="cabe-info"></p>
   </div>
 
+  <div id="trava-validade" style="display:none"></div>
+
   <div class="cartao" id="cx-filtro" style="display:none">
     <label class="et">O que baixar</label>
     <div class="chips" id="lista-filtro"></div>
@@ -616,7 +628,7 @@ tr:last-child td{border-bottom:0}
     <div id="preview"></div>
     <div id="legenda-prev" class="sub" style="margin:10px 0 0;font-size:12.5px"></div>
     <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
-      <button class="bt bt-vazio" onclick="baixarUmPng()">Baixar esta em .png</button>
+      <button class="bt bt-vazio" id="bt-um-png" onclick="baixarUmPng()">Baixar esta em .png</button>
       <button class="bt bt-azul" id="bt-zip" onclick="baixarTodosPng()">Baixar todas em .png (zip)</button>
     </div>
   </div>
@@ -1056,7 +1068,8 @@ function lerPlanilha(arq){
   fr.readAsArrayBuffer(arq);
 }
 /* ===== validade das ofertas — datas informadas por ti ===== */
-let validade = {findiInicio:'', findiFim:'', diaBoa:''};
+let validade = {findiInicio:'', findiFim:'', diaBoa:'', editadoEm:'', confirmadoEm:''};
+const hoje = () => new Date().toLocaleDateString('pt-BR');
 const FRASE = {
   faixa: 'Ofertas válidas para as lojas de Bom Princípio e São Sebastião do Caí de {inicio} a {fim}',
   unica: 'Ofertas válidas para as lojas de Bom Princípio e São Sebastião do Caí dia {dia}'
@@ -1077,8 +1090,31 @@ function fraseValidade(aba, secao){
 }
 function setValidade(campo, valor){
   validade[campo] = valor.trim();
+  validade.editadoEm = hoje();          // mexeu hoje, então está ciente
+  validade.confirmadoEm = '';
   pintarPreviaValidade();
   if(pastaXls) lerDados(); else marcarSujo();
+}
+function confirmarValidade(){
+  validade.confirmadoEm = hoje();
+  marcarSujo(); montarPreview();
+}
+
+/* a impressão fica travada até as datas serem revistas hoje */
+function estadoValidade(){
+  const uteis = selecionadas();
+  const precisaFindi = uteis.some(l=> l.secao==='findi' || ABA_FINDI.test(l.aba));
+  const precisaDia   = uteis.some(l=> l.secao==='dia');
+  if(!precisaFindi && !precisaDia) return {ok:true, precisa:false};
+
+  const faltando = [];
+  if(precisaFindi && !validade.findiInicio) faltando.push('o período do Findi');
+  if(precisaDia && !validade.diaBoa) faltando.push('o dia da Boa do Dia');
+  if(faltando.length) return {ok:false, precisa:true, vazio:true, faltando};
+
+  const visto = validade.editadoEm === hoje() || validade.confirmadoEm === hoje();
+  return {ok:visto, precisa:true, vazio:false,
+          desde: validade.editadoEm || 'data desconhecida'};
 }
 function setFrase(qual, txt){ FRASE[qual] = txt; pintarPreviaValidade(); if(pastaXls) lerDados(); }
 function pintarPreviaValidade(){
@@ -1481,7 +1517,7 @@ function montarPreview(){
     if(pastaXls && linhas.length) motivos.push('os produtos foram lidos mas nenhum template combina com a aba e o tipo deles — confere na etapa 3 quais estão marcados como sem template');
     alertas.innerHTML = `<div class="aviso"><b>Nenhuma cartela pronta</b>${
       motivos.map(m=>'&bull; '+esc(m)).join('<br>')}</div>`;
-    info.textContent=''; document.getElementById('bt-imprimir').disabled = true;
+    info.textContent=''; aplicarTrava();
     return;
   }
   const r = montarFolhas();
@@ -1495,9 +1531,42 @@ function montarPreview(){
     : '';
   info.textContent = `Cabem ${r.porFolha} cartelas por folha nessa largura.`;
   pintarPreview();
-  document.getElementById('bt-imprimir').disabled = false;
+  aplicarTrava();
+}
+
+/* barra vermelha e botões travados enquanto as datas não forem revistas */
+function aplicarTrava(){
+  const e = estadoValidade();
+  const cx = document.getElementById('trava-validade');
+  const btImp = document.getElementById('bt-imprimir');
+  const btZip = document.getElementById('bt-zip');
+  const btUm  = document.getElementById('bt-um-png');
+  const temCartela = selecionadas().length > 0;
+
+  if(cx){
+    if(e.ok || !temCartela){ cx.innerHTML = ''; cx.style.display='none'; }
+    else{
+      cx.style.display='block';
+      const corpo = e.vazio
+        ? `Falta preencher ${e.faltando.join(' e ')} na etapa 3.`
+        : `As datas gravadas são do dia ${esc(e.desde)} e ainda não foram revistas hoje.`;
+      const atuais = `Findi: <b>${esc(validade.findiInicio||'—')}${validade.findiFim?' a '+esc(validade.findiFim):''}</b>`
+                   + ` &nbsp;·&nbsp; Boa do Dia: <b>${esc(validade.diaBoa||'—')}</b>`;
+      cx.innerHTML = `<div class="trava">
+        <div class="trava-tit">Confere a validade antes de imprimir</div>
+        <p>${corpo}</p>
+        <p class="trava-datas">${atuais}</p>
+        ${e.vazio ? '' : `<button class="bt bt-laranja" onclick="confirmarValidade()">Estão corretas, liberar</button>`}
+      </div>`;
+    }
+  }
+  const travar = temCartela && !e.ok;
+  if(btImp) btImp.disabled = !temCartela || travar;
+  if(btZip) btZip.disabled = travar;
+  if(btUm)  btUm.disabled  = travar;
 }
 function imprimir(){
+  if(!estadoValidade().ok){ alert('Confere a validade das ofertas na etapa 3 antes de imprimir.'); return; }
   const r = montarFolhas();
   if(!r.html){ alert('Nenhuma cartela pronta pra imprimir.'); return; }
   const raiz = document.getElementById('print-root');
@@ -1761,6 +1830,7 @@ function nomeArquivo(l, i){
   return String(i+1).padStart(3,'0') + '-' + (limpo(l.produto) || 'cartela') + '.png';
 }
 async function baixarUmPng(){
+  if(!estadoValidade().ok){ alert('Confere a validade das ofertas na etapa 3 antes de gerar.'); return; }
   const uteis = selecionadas();
   if(!uteis.length) return;
   const l = uteis[iPrev];
@@ -1772,6 +1842,7 @@ async function baixarUmPng(){
   a.click();
 }
 async function baixarTodosPng(){
+  if(!estadoValidade().ok){ alert('Confere a validade das ofertas na etapa 3 antes de gerar.'); return; }
   const uteis = selecionadas();
   if(!uteis.length) return;
   const bt = document.getElementById('bt-zip');

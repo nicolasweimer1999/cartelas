@@ -305,7 +305,7 @@ tr:last-child td{border-bottom:0}
   <div class="marca">
     <h1>Gerador de Cartelas</h1>
     <span>planilha + template &rarr; folha A4 pronta pra imprimir</span>
-    <span class="versao">v7</span>
+    <span class="versao">v8</span>
   </div>
   <div class="abas" role="tablist">
     <button class="aba" role="tab" id="aba-1" aria-selected="true" onclick="verPainel(1)"><span class="n">1</span> Templates</button>
@@ -369,9 +369,10 @@ tr:last-child td{border-bottom:0}
       <button class="campo-bt" data-campo="preco_por" onclick="selCampo('preco_por')">
         <span>Preço "por"</span><span class="est" id="est-preco_por">—</span>
       </button>
-      <button class="campo-bt" data-campo="validade" onclick="selCampo('validade')">
+      <button class="campo-bt destaque-validade" data-campo="validade" onclick="selCampo('validade')">
         <span>Validade da oferta</span><span class="est" id="est-validade">—</span>
       </button>
+      <p class="sub" id="dica-validade" style="margin:6px 0 0;font-size:11.5px"></p>
 
       <div id="aviso-colisao" style="margin-top:13px"></div>
       <div id="sem-campo" class="sub" style="margin:14px 0 0;font-size:12.5px">Escolhe um campo acima pra posicionar.</div>
@@ -480,6 +481,43 @@ tr:last-child td{border-bottom:0}
   </div>
   <input type="file" id="in-xls" accept=".xlsx,.xls,.csv" hidden>
 
+  <div class="cartao" style="margin-top:16px;border-color:var(--laranja)">
+    <label class="et">Validade das ofertas</label>
+    <p class="sub" style="margin:0 0 12px;font-size:12.5px">
+      Informa as datas e o texto se monta sozinho. Vale pras cartelas do Findi, Boa do Dia e Boa do Findi.
+    </p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+      <div>
+        <label class="et" for="vg-inicio">Início</label>
+        <input type="text" id="vg-inicio" class="mini-data" placeholder="14/08"
+               oninput="setValidadeGeral('inicio',this.value)">
+      </div>
+      <div>
+        <label class="et" for="vg-fim">Fim</label>
+        <input type="text" id="vg-fim" class="mini-data" placeholder="16/08"
+               oninput="setValidadeGeral('fim',this.value)">
+      </div>
+      <div style="flex:1;min-width:240px">
+        <label class="et">Como vai sair na cartela</label>
+        <div id="previa-frase" class="frase-prev" style="padding:7px 9px;background:#F6F8FA;border-radius:6px;min-height:32px"></div>
+      </div>
+    </div>
+    <details style="margin-top:12px">
+      <summary class="et" style="cursor:pointer;margin:0">Editar o texto fixo</summary>
+      <div class="ctrl">
+        <label class="et" for="fr-faixa">Quando tem período</label>
+        <input type="text" id="fr-faixa" onchange="setFrase('faixa',this.value)">
+      </div>
+      <div class="ctrl">
+        <label class="et" for="fr-unica">Quando é um dia só</label>
+        <input type="text" id="fr-unica" onchange="setFrase('unica',this.value)">
+      </div>
+      <p class="sub" style="margin:9px 0 0;font-size:12px">
+        Usa <b>{inicio}</b> e <b>{fim}</b> onde as datas devem entrar.
+      </p>
+    </details>
+  </div>
+
   <div class="cartao" id="cx-escolha" style="margin-top:16px;display:none;border-color:var(--azul)">
     <div class="cabeca-cols">
       <label class="et" style="margin:0">O que vamos gerar hoje</label>
@@ -518,11 +556,13 @@ tr:last-child td{border-bottom:0}
 
     <div id="bloco-validade" style="display:none">
       <div class="divisor"></div>
-      <label class="et">Validade das ofertas</label>
-      <p class="sub" style="margin:0 0 12px;font-size:12.5px">
-        Só as cartelas do Findi e das Boas do Dia levam esse texto. As datas saem do título da aba — corrige aqui se alguma vier errada.
-      </p>
-      <div class="rolagem"><table id="tab-validade"></table></div>
+      <details>
+        <summary class="et" style="cursor:pointer;margin:0">Datas diferentes por aba (opcional)</summary>
+        <p class="sub" style="margin:9px 0 12px;font-size:12.5px">
+          Preenchido aqui, tem prioridade sobre as datas gerais. Deixa em branco pra usar as de cima.
+        </p>
+        <div class="rolagem"><table id="tab-validade"></table></div>
+      </details>
     </div>
   </div>
 
@@ -786,6 +826,24 @@ function pintarTela(){
   ligarArraste();
   pintarControles();
   avisarColisao();
+  dicaValidade();
+}
+
+/* avisa quando o template deveria ter validade e o campo está desligado */
+function dicaValidade(){
+  const t = achaTpl();
+  const el = document.getElementById('dica-validade');
+  if(!t || !el) return;
+  const precisa = t.tipo.startsWith('boa') || ABA_FINDI.test(t.aba||'');
+  const ligado = (t.campos.validade||{}).ativo;
+  if(precisa && !ligado){
+    el.innerHTML = '<span style="color:var(--laranja);font-weight:600">'
+      + 'Esse template leva validade. Clica no campo acima pra ligar e posicionar na faixa do rodapé.</span>';
+  }else if(!precisa && ligado){
+    el.textContent = 'Esse template não recebe validade — o campo vai sair vazio.';
+  }else{
+    el.textContent = '';
+  }
 }
 
 /* marca caixas que se cruzam — a causa mais comum de texto por cima de texto */
@@ -995,7 +1053,8 @@ function lerPlanilha(arq){
   fr.readAsArrayBuffer(arq);
 }
 /* ===== validade das ofertas ===== */
-let validadeAba = {};   // { aba: {inicio:'14/08', fim:'16/08'} }
+let validadeAba = {};              // datas por aba, quando quiser diferenciar
+let validadeGeral = {inicio:'', fim:''};   // datas digitadas, valem pra todas
 const FRASE = {
   faixa: 'Ofertas válidas para as lojas de Bom Princípio e São Sebastião do Caí de {inicio} a {fim}',
   unica: 'Ofertas válidas para as lojas de Bom Princípio e São Sebastião do Caí dia {inicio}'
@@ -1043,7 +1102,8 @@ function detectarValidade(grade, nome){
   return null;
 }
 function frasePara(aba){
-  const v = validadeAba[aba];
+  const esp = validadeAba[aba];
+  const v = (esp && esp.inicio) ? esp : validadeGeral;
   if(!v || !v.inicio) return '';
   const modelo = (v.fim && v.fim !== v.inicio) ? FRASE.faixa : FRASE.unica;
   return modelo.replace('{inicio}', v.inicio).replace('{fim}', v.fim || v.inicio);
@@ -1052,6 +1112,24 @@ function setValidade(aba, campo, valor){
   if(!validadeAba[aba]) validadeAba[aba] = {};
   validadeAba[aba][campo] = valor.trim();
   lerDados();
+}
+function setValidadeGeral(campo, valor){
+  validadeGeral[campo] = valor.trim();
+  if(campo==='inicio' && !validadeGeral.fim) validadeGeral.fim = valor.trim();
+  pintarFraseGeral();
+  if(pastaXls) lerDados(); else marcarSujo();
+}
+function setFrase(qual, txt){ FRASE[qual] = txt; pintarFraseGeral(); if(pastaXls) lerDados(); }
+function pintarFraseGeral(){
+  const el = document.getElementById('previa-frase');
+  if(!el) return;
+  const v = validadeGeral;
+  if(!v.inicio){ el.innerHTML = '<span class="diag-ruim">informa a data de início pra montar o texto</span>'; return; }
+  const modelo = (v.fim && v.fim !== v.inicio) ? FRASE.faixa : FRASE.unica;
+  el.textContent = modelo.replace('{inicio}', v.inicio).replace('{fim}', v.fim || v.inicio);
+  const i = document.getElementById('vg-inicio'), f = document.getElementById('vg-fim');
+  if(i && i.value !== v.inicio) i.value = v.inicio;
+  if(f && f.value !== v.fim) f.value = v.fim;
 }
 function montarTabelaValidade(){
   const t = document.getElementById('tab-validade');
@@ -1145,7 +1223,12 @@ function detectarTodas(forcar){
     const grade = XLSX.utils.sheet_to_json(pastaXls.Sheets[nome], {header:1, defval:''});
     if(forcar || !validadeAba[nome]){
       const v = detectarValidade(grade, nome);
-      if(v) validadeAba[nome] = v;
+      if(v){
+        validadeAba[nome] = v;
+        if(!validadeGeral.inicio && (ABA_FINDI.test(nome) || /findi/i.test(nome))){
+          validadeGeral = {inicio:v.inicio, fim:v.fim};
+        }
+      }
     }
     if(!forcar && colsAba[nome]) return;
     colsAba[nome] = detectarColunas(grade, inicio);
@@ -1510,7 +1593,7 @@ function estadoAtual(){
     versao:3, templates,
     inicio: document.getElementById('f-inicio')?.value || '2',
     moeda: document.getElementById('f-moeda')?.value || 'virgula',
-    colsAba, validadeAba,
+    colsAba, validadeAba, validadeGeral, frases:FRASE,
     larg: document.getElementById('f-larg')?.value || '96',
     esp: document.getElementById('f-esp')?.value || '3',
     quando: Date.now()
@@ -1556,6 +1639,9 @@ function aplicarEstado(cfg){
   põe('f-larg', cfg.larg); põe('f-esp', cfg.esp);
   if(cfg.colsAba) colsAba = cfg.colsAba;
   if(cfg.validadeAba) validadeAba = cfg.validadeAba;
+  if(cfg.validadeGeral) validadeGeral = cfg.validadeGeral;
+  if(cfg.frases){ FRASE.faixa = cfg.frases.faixa || FRASE.faixa; FRASE.unica = cfg.frases.unica || FRASE.unica; }
+  pintarFraseGeral();
   pintarTemplates(); pintarSeletor(); pintarTela(); lerDados(); atualizarRodape();
   comprimirExistentes().then(n=>{
     if(n){ pintarTemplates(); pintarTela(); marcarSujo(); }
@@ -1901,6 +1987,10 @@ function atualizarRodape(){
   document.getElementById('bt-imprimir').disabled = prontas===0;
 }
 pintarSeletor(); pintarTela();
+const _ff = document.getElementById('fr-faixa'), _fu = document.getElementById('fr-unica');
+if(_ff) _ff.value = FRASE.faixa;
+if(_fu) _fu.value = FRASE.unica;
+pintarFraseGeral();
 iniciarNuvem();
 </script>
 </body>

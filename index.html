@@ -319,7 +319,7 @@ tr:last-child td{border-bottom:0}
   <div class="marca">
     <h1>Gerador de Cartelas</h1>
     <span>planilha + template &rarr; folha A4 pronta pra imprimir</span>
-    <span class="versao">v10</span>
+    <span class="versao">v11</span>
   </div>
   <div class="abas" role="tablist">
     <button class="aba" role="tab" id="aba-1" aria-selected="true" onclick="verPainel(1)"><span class="n">1</span> Templates</button>
@@ -477,7 +477,8 @@ tr:last-child td{border-bottom:0}
           <input type="text" id="f-prefixo" placeholder="R$ " oninput="mudar('prefixo',this.value)">
         </div>
         <div class="divisor"></div>
-        <button class="bt bt-vazio" style="width:100%" onclick="copiarPra()">Copiar ajustes pros outros templates</button>
+        <button class="bt bt-vazio" style="width:100%" onclick="desligarCampo()">Desligar este campo</button>
+        <button class="bt bt-vazio" style="width:100%;margin-top:7px" onclick="copiarPra()">Copiar ajustes pros outros templates</button>
         <button class="bt bt-vazio" style="width:100%;margin-top:7px" onclick="aplicarPadraoCasa()">Aplicar fonte e cores padrão em todos</button>
       </div>
     </div>
@@ -835,7 +836,7 @@ function pintarTela(){
     const e = document.getElementById('est-'+c);
     const on = (t.campos[c]||{}).ativo;
     b.setAttribute('data-on', campoAtual===c ? '1':'0');
-    e.textContent = on ? 'no lugar' : 'desligado';
+    e.textContent = on ? 'ligado' : 'desligado';
     e.className = on ? 'est viva' : 'est';
   });
   ligarArraste();
@@ -953,9 +954,19 @@ window.addEventListener('resize', ajustarFontes);
 
 function selCampo(c){
   const t = achaTpl(); if(!t) return;
+  if(!t.campos[c]) t.campos[c] = padrao(c);
+  // clicar de novo no campo já selecionado desliga
+  if(campoAtual === c && t.campos[c].ativo){ desligarCampo(); return; }
   campoAtual = c;
-  if(!t.campos[c].ativo) t.campos[c].ativo = true;
-  pintarTela();
+  t.campos[c].ativo = true;
+  pintarTela(); marcarSujo();
+}
+function desligarCampo(){
+  const t = achaTpl();
+  if(!t || !campoAtual) return;
+  t.campos[campoAtual].ativo = false;
+  campoAtual = null;
+  pintarTela(); marcarSujo();
 }
 function pintarControles(){
   const t = achaTpl();

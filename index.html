@@ -319,7 +319,7 @@ tr:last-child td{border-bottom:0}
   <div class="marca">
     <h1>Gerador de Cartelas</h1>
     <span>planilha + template &rarr; folha A4 pronta pra imprimir</span>
-    <span class="versao">v11</span>
+    <span class="versao">v12</span>
   </div>
   <div class="abas" role="tablist">
     <button class="aba" role="tab" id="aba-1" aria-selected="true" onclick="verPainel(1)"><span class="n">1</span> Templates</button>
@@ -1090,7 +1090,8 @@ const FRASE = {
 function fraseValidade(aba, secao){
   if(secao === 'dia'){
     if(!validade.diaBoa) return '';
-    return FRASE.unica.replace('{dia}', validade.diaBoa);
+    // aceita {dia}, e também {inicio}/{fim} de versões anteriores
+    return FRASE.unica.replace(/\{dia\}|\{inicio\}|\{fim\}/g, validade.diaBoa);
   }
   if(secao === 'findi' || ABA_FINDI.test(aba)){
     if(!validade.findiInicio) return '';
@@ -1655,7 +1656,11 @@ function aplicarEstado(cfg){
   põe('f-larg', cfg.larg); põe('f-esp', cfg.esp);
   if(cfg.colsAba) colsAba = cfg.colsAba;
   if(cfg.validade) validade = {...validade, ...cfg.validade};
-  if(cfg.frases){ FRASE.faixa = cfg.frases.faixa || FRASE.faixa; FRASE.unica = cfg.frases.unica || FRASE.unica; }
+  if(cfg.frases){
+    FRASE.faixa = cfg.frases.faixa || FRASE.faixa;
+    // versões antigas gravaram {inicio} no texto de dia único
+    FRASE.unica = (cfg.frases.unica || FRASE.unica).replace(/\{inicio\}|\{fim\}/g, '{dia}');
+  }
   pintarPreviaValidade();
   pintarTemplates(); pintarSeletor(); pintarTela(); lerDados(); atualizarRodape();
   comprimirExistentes().then(n=>{
@@ -2006,7 +2011,7 @@ function atualizarRodape(){
 pintarSeletor(); pintarTela();
 const _ff = document.getElementById('fr-faixa'), _fu = document.getElementById('fr-unica');
 if(_ff) _ff.value = FRASE.faixa;
-if(_fu) _fu.value = FRASE.unica;
+if(_fu) _fu.value = FRASE.unica.replace(/\{inicio\}|\{fim\}/g, '{dia}');
 pintarPreviaValidade();
 iniciarNuvem();
 </script>
